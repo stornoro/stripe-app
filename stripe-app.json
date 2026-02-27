@@ -1,0 +1,55 @@
+{
+  "id": "com.storno.stripe-app",
+  "version": "2.0.0",
+  "name": "Storno.ro",
+  "icon": "./icon.png",
+  "permissions": [
+    {
+      "permission": "customer_read",
+      "purpose": "Match Stripe customers with Storno.ro clients"
+    },
+    {
+      "permission": "charge_read",
+      "purpose": "View charges to link with e-Factura invoices"
+    },
+    {
+      "permission": "payment_intent_read",
+      "purpose": "View payments to display invoice status"
+    },
+    {
+      "permission": "invoice_read",
+      "purpose": "Read Stripe invoices to create e-Factura"
+    },
+    {
+      "permission": "secret_write",
+      "purpose": "Store authentication tokens securely"
+    }
+  ],
+  "ui_extension": {
+    "views": [
+      {
+        "component": "InvoiceListView",
+        "viewport": "stripe.dashboard.home.overview"
+      },
+      {
+        "component": "ClientDetailView",
+        "viewport": "stripe.dashboard.customer.detail"
+      },
+      {
+        "component": "InvoiceDetailView",
+        "viewport": "stripe.dashboard.payment.detail"
+      },
+      {
+        "component": "SettingsView",
+        "viewport": "settings"
+      }
+    ],
+    "content_security_policy": {
+      "connect-src": [
+        "https://api.storno.ro",
+        "https://proc-charter-ensures-korean.trycloudflare.com"
+      ],
+      "purpose": "Communicate with Storno.ro backend API"
+    }
+  }
+}

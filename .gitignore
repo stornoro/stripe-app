@@ -1,0 +1,5 @@
+node_modules/
+.build/
+.stripe/
+.DS_Store
+.env
