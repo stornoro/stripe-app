@@ -50,4 +50,4 @@ npm run upload
 
 ## License
 
-Proprietary — see [Storno.ro](https://storno.ro)
+[Elastic License 2.0 (ELv2)](LICENSE)
