@@ -1,7 +1,6 @@
-// In development, use your cloudflare tunnel URL.
-// In production, use the production API URL.
-const DEV_API = 'https://proc-charter-ensures-korean.trycloudflare.com/api/v1'
+// Stripe Apps inject NODE_ENV: "development" for `stripe apps start`,
+// "production" for `stripe apps build` / `stripe apps upload`.
 const PROD_API = 'https://api.storno.ro/api/v1'
+const DEV_API = process.env.STORNO_DEV_API ?? PROD_API
 
-// Toggle this when deploying
-export const API_BASE = DEV_API
+export const API_BASE = process.env.NODE_ENV === 'production' ? PROD_API : DEV_API

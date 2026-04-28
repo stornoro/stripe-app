@@ -1,8 +1,9 @@
 {
-  "id": "com.storno.stripe-app",
-  "version": "2.0.0",
-  "name": "Storno.ro",
+  "connect_permissions": null,
+  "distribution_type": "private",
   "icon": "./icon.png",
+  "id": "com.storno.stripe-app",
+  "name": "Storno.ro",
   "permissions": [
     {
       "permission": "customer_read",
@@ -26,6 +27,13 @@
     }
   ],
   "ui_extension": {
+    "content_security_policy": {
+      "connect-src": [
+        "https://api.storno.ro/api/v1"
+      ],
+      "image-src": null,
+      "purpose": "Communicate with Storno.ro backend API"
+    },
     "views": [
       {
         "component": "InvoiceListView",
@@ -43,13 +51,7 @@
         "component": "SettingsView",
         "viewport": "settings"
       }
-    ],
-    "content_security_policy": {
-      "connect-src": [
-        "https://api.storno.ro",
-        "https://proc-charter-ensures-korean.trycloudflare.com"
-      ],
-      "purpose": "Communicate with Storno.ro backend API"
-    }
-  }
+    ]
+  },
+  "version": "2.0.1"
 }
