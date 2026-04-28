@@ -1,4 +1,4 @@
 [[extensions]]
-name = "storno-app"
+name = "storno"
 type = "ui_extension"
 entry = "src/index.tsx"

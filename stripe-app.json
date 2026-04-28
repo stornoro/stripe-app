@@ -3,7 +3,7 @@
   "distribution_type": "private",
   "icon": "./icon.png",
   "id": "com.storno.stripe-app",
-  "name": "Storno.ro",
+  "name": "Storno",
   "permissions": [
     {
       "permission": "customer_read",
@@ -65,5 +65,5 @@
       }
     ]
   },
-  "version": "3.0.3"
+  "version": "3.0.4"
 }
