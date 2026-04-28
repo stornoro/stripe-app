@@ -10,10 +10,6 @@
       "purpose": "Match Stripe customers with Storno.ro clients by tax ID, email, or name"
     },
     {
-      "permission": "charge_read",
-      "purpose": "Resolve which Stripe invoice is linked to a charge when creating credit notes"
-    },
-    {
       "permission": "payment_intent_read",
       "purpose": "Display payment status and link payments to e-Factura invoices"
     },
@@ -65,5 +61,5 @@
       }
     ]
   },
-  "version": "3.0.6"
+  "version": "3.0.7"
 }

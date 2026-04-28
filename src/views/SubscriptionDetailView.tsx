@@ -129,18 +129,18 @@ const SubscriptionDetailView = ({ userContext, environment }: ExtensionContextVa
         })
 
         const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId!, {
-          expand: ['customer', 'items.data.price.product'],
+          expand: ['customer'],
         })
 
         const customer = sub.customer as Stripe.Customer | null
         const firstItem = sub.items.data[0]
-        const product = firstItem?.price?.product as Stripe.Product | null
-
+        // We don't expand items.data.price.product — that requires the
+        // product_read permission. Fall back to price.nickname for plan name.
         setSubscriptionInfo({
           id: sub.id,
           status: sub.status,
           customerName: customer?.name ?? null,
-          planName: product?.name ?? firstItem?.price?.nickname ?? null,
+          planName: firstItem?.price?.nickname ?? null,
           amount: (firstItem?.price?.unit_amount ?? 0) / 100,
           currency: (firstItem?.price?.currency ?? 'RON').toUpperCase(),
           interval: firstItem?.price?.recurring?.interval ?? '',
