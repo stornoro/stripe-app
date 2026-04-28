@@ -26,10 +26,6 @@
       "purpose": "List subscription billing cycles and their linked e-Factura invoices"
     },
     {
-      "permission": "refund_read",
-      "purpose": "Read refund details to create Romanian credit notes (factura de storno)"
-    },
-    {
       "permission": "secret_write",
       "purpose": "Store authentication tokens securely per Stripe user"
     }
@@ -60,10 +56,6 @@
         "viewport": "stripe.dashboard.invoice.detail"
       },
       {
-        "component": "RefundDetailView",
-        "viewport": "stripe.dashboard.refund.detail"
-      },
-      {
         "component": "SubscriptionDetailView",
         "viewport": "stripe.dashboard.subscription.detail"
       },
@@ -73,5 +65,5 @@
       }
     ]
   },
-  "version": "3.0.0"
+  "version": "3.0.1"
 }
