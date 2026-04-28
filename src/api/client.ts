@@ -1,4 +1,4 @@
-import type { AuthTokens, Invoice, Client, AppSettings, DashboardStats } from '../types'
+import type { AuthTokens, Invoice, Client, AppSettings, DashboardStats, SubscriptionCycle } from '../types'
 import { API_BASE } from '../config'
 import { t } from '../i18n'
 import type { TranslationKey } from '../i18n/en'
@@ -120,38 +120,6 @@ async function refreshToken(): Promise<boolean> {
 
 // --- Auth ---
 
-export async function exchangeJwtForTokens(
-  jwt: string,
-  stripeAccountId: string,
-): Promise<AuthTokens> {
-  const response = await safeFetch(`${API_BASE}/stripe-app/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'authorization_code',
-      code: jwt,
-      stripe_account_id: stripeAccountId,
-    }),
-  })
-
-  if (!response.ok) {
-    await throwApiError(response)
-  }
-
-  const tokens: AuthTokens = await response.json()
-  currentTokens = tokens
-  return tokens
-}
-
-export interface DeviceAuthorization {
-  device_code: string
-  user_code: string
-  verification_uri: string
-  verification_uri_complete: string
-  expires_in: number
-  interval: number
-}
-
 export async function startDeviceAuthorization(
   stripeAccountId: string,
 ): Promise<DeviceAuthorization> {
@@ -166,6 +134,15 @@ export async function startDeviceAuthorization(
   }
 
   return response.json()
+}
+
+export interface DeviceAuthorization {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  verification_uri_complete: string
+  expires_in: number
+  interval: number
 }
 
 export type DevicePollResult =
@@ -249,35 +226,28 @@ export async function fetchDashboard(): Promise<DashboardStats> {
 export async function fetchInvoices(params?: {
   page?: number
   search?: string
-  companyId?: string
 }): Promise<{ data: Invoice[]; total: number }> {
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
   if (params?.search) query.set('search', params.search)
 
-  const headers: Record<string, string> = {}
-  if (params?.companyId) {
-    headers['X-Company'] = params.companyId
-  }
-
-  return apiFetch(`/invoices?${query}`, { headers })
+  return apiFetch(`/invoices?${query}`)
 }
 
-export async function fetchInvoice(
-  id: string,
-  companyId?: string,
-): Promise<Invoice> {
-  const headers: Record<string, string> = {}
-  if (companyId) {
-    headers['X-Company'] = companyId
-  }
+export async function fetchInvoice(id: string): Promise<Invoice> {
+  return apiFetch(`/invoices/${id}`)
+}
 
-  return apiFetch(`/invoices/${id}`, { headers })
+export async function fetchInvoiceByStripeId(stripeInvoiceId: string): Promise<Invoice | null> {
+  const result: { invoice: Invoice | null } = await apiFetch(
+    `/stripe-app/invoices-by-stripe/${encodeURIComponent(stripeInvoiceId)}`,
+  )
+  return result.invoice
 }
 
 export async function createFromStripeInvoice(stripeInvoiceId: string): Promise<{
   id: string
-  invoiceNumber: string
+  invoiceNumber: string | null
   status: string
 }> {
   return apiFetch('/stripe-app/invoices/create-from-stripe', {
@@ -300,16 +270,46 @@ export async function retryInvoice(uuid: string): Promise<{
 export async function fetchClients(params?: {
   page?: number
   search?: string
-  companyId?: string
 }): Promise<{ data: Client[]; total: number }> {
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
   if (params?.search) query.set('search', params.search)
 
-  const headers: Record<string, string> = {}
-  if (params?.companyId) {
-    headers['X-Company'] = params.companyId
-  }
+  return apiFetch(`/clients?${query}`)
+}
 
-  return apiFetch(`/clients?${query}`, { headers })
+// --- Refunds ---
+
+export async function fetchRefundCreditNote(stripeRefundId: string): Promise<Invoice | null> {
+  const result: { creditNote: Invoice | null } = await apiFetch(
+    `/stripe-app/refunds/${encodeURIComponent(stripeRefundId)}`,
+  )
+  return result.creditNote
+}
+
+export async function createCreditNoteFromRefund(stripeRefundId: string): Promise<Invoice> {
+  return apiFetch(`/stripe-app/refunds/${encodeURIComponent(stripeRefundId)}/create-credit-note`, {
+    method: 'POST',
+  })
+}
+
+// --- Subscriptions ---
+
+export async function fetchSubscriptionInvoices(
+  stripeSubscriptionId: string,
+): Promise<SubscriptionCycle[]> {
+  const result: { invoices: SubscriptionCycle[] } = await apiFetch(
+    `/stripe-app/subscriptions/${encodeURIComponent(stripeSubscriptionId)}/invoices`,
+  )
+  return result.invoices
+}
+
+export async function createSubscriptionInvoice(
+  stripeSubscriptionId: string,
+  stripeInvoiceId: string,
+): Promise<Invoice> {
+  return apiFetch(
+    `/stripe-app/subscriptions/${encodeURIComponent(stripeSubscriptionId)}/invoices/${encodeURIComponent(stripeInvoiceId)}/create`,
+    { method: 'POST' },
+  )
 }

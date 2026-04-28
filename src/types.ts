@@ -1,19 +1,22 @@
 export interface Invoice {
   id: string
-  invoiceNumber: string
-  issueDate: string
-  dueDate: string | null
+  invoiceNumber: string | null
+  issueDate: string | null
+  dueDate?: string | null
   total: string
   currency: string
-  senderName: string
-  senderCif: string
-  receiverName: string
-  receiverCif: string
-  direction: 'sent' | 'received'
+  senderName?: string
+  senderCif?: string
+  receiverName: string | null
+  receiverCif?: string | null
+  direction?: 'sent' | 'received'
   status: string
-  paymentStatus: string | null
-  amountPaid: string
+  documentType?: string
+  paymentStatus?: string | null
+  amountPaid?: string
   anafStatus: string | null
+  anafErrorMessage?: string | null
+  parentDocumentId?: string | null
 }
 
 export interface Client {
@@ -40,10 +43,17 @@ export interface Company {
   cif: string
 }
 
+export interface ConnectedUser {
+  email: string
+  name: string
+  connectedAt: string
+}
+
 export interface AppSettings {
   autoMode: boolean
   company: Company
   locale: string | null
+  connectedUser: ConnectedUser | null
 }
 
 export interface DashboardStats {
@@ -62,11 +72,22 @@ export interface DashboardStats {
 
 export interface DashboardInvoice {
   id: string
-  invoiceNumber: string
+  invoiceNumber: string | null
   issueDate: string | null
   total: string
   currency: string
-  receiverName: string
+  receiverName: string | null
   status: string
   anafStatus: string | null
+  anafErrorMessage?: string | null
+}
+
+export interface SubscriptionCycle {
+  stripeInvoiceId: string
+  stripePeriodStart: string | null
+  stripePeriodEnd: string | null
+  stripeAmount: number
+  stripeCurrency: string
+  stripeStatus: string
+  stornoInvoice: Invoice | null
 }

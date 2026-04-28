@@ -7,23 +7,31 @@
   "permissions": [
     {
       "permission": "customer_read",
-      "purpose": "Match Stripe customers with Storno.ro clients"
+      "purpose": "Match Stripe customers with Storno.ro clients by tax ID, email, or name"
     },
     {
       "permission": "charge_read",
-      "purpose": "View charges to link with e-Factura invoices"
+      "purpose": "Resolve which Stripe invoice is linked to a charge when creating credit notes"
     },
     {
       "permission": "payment_intent_read",
-      "purpose": "View payments to display invoice status"
+      "purpose": "Display payment status and link payments to e-Factura invoices"
     },
     {
       "permission": "invoice_read",
-      "purpose": "Read Stripe invoices to create e-Factura"
+      "purpose": "Read Stripe invoices to create and link e-Factura documents"
+    },
+    {
+      "permission": "subscription_read",
+      "purpose": "List subscription billing cycles and their linked e-Factura invoices"
+    },
+    {
+      "permission": "refund_read",
+      "purpose": "Read refund details to create Romanian credit notes (factura de storno)"
     },
     {
       "permission": "secret_write",
-      "purpose": "Store authentication tokens securely"
+      "purpose": "Store authentication tokens securely per Stripe user"
     }
   ],
   "ui_extension": {
@@ -48,10 +56,22 @@
         "viewport": "stripe.dashboard.payment.detail"
       },
       {
+        "component": "StripeInvoiceDetailView",
+        "viewport": "stripe.dashboard.invoice.detail"
+      },
+      {
+        "component": "RefundDetailView",
+        "viewport": "stripe.dashboard.refund.detail"
+      },
+      {
+        "component": "SubscriptionDetailView",
+        "viewport": "stripe.dashboard.subscription.detail"
+      },
+      {
         "component": "SettingsView",
         "viewport": "settings"
       }
     ]
   },
-  "version": "2.0.7"
+  "version": "3.0.0"
 }

@@ -40,6 +40,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined)
   const [userCode, setUserCode] = useState<string | null>(null)
   const [verificationUri, setVerificationUri] = useState<string | null>(null)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cancelledRef = useRef(false)
@@ -86,7 +87,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
     setVerificationUri(auth.verification_uri_complete)
 
     if (popup) {
-      try { popup.location.href = auth.verification_uri_complete } catch { /* fall back to manual Link */ }
+      try { popup.location.href = auth.verification_uri_complete } catch { /* fall back to Link */ }
     }
 
     let interval = Math.max(2, auth.interval) * 1000
@@ -156,10 +157,19 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
     setError(null)
   }, [stopPolling])
 
+  const handleDisconnectConfirm = useCallback(() => {
+    setConfirmDisconnect(true)
+  }, [])
+
+  const handleDisconnectCancel = useCallback(() => {
+    setConfirmDisconnect(false)
+  }, [])
+
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
     setError(null)
     setSuccess(null)
+    setConfirmDisconnect(false)
 
     try {
       await apiDisconnect(stripeAccountId)
@@ -182,7 +192,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
         setStatusMessage(t('common.saved'))
         setTimeout(() => setStatusMessage(undefined), 2000)
       } catch {
-        // Error handled in hook
+        // Error is held by the hook in settingsError
       }
     },
     [updateSettings, t],
@@ -217,18 +227,33 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
 
         {(error || authError || settingsError) && (
           <Box css={{ marginBottom: 'small' }}>
-            {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-            <Notice type="negative" title={t('common.error')} description={error || authError || settingsError} />
-          </Box>
-        )}
-        {success && (
-          <Box css={{ marginBottom: 'small' }}>
-            {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-            <Notice type="positive" title={t('common.success')} description={success} />
+            <Notice type="attention">{error || authError || settingsError}</Notice>
           </Box>
         )}
 
-        {!isConnected && !userCode && (
+        {success && (
+          <Box css={{ marginBottom: 'small' }}>
+            <Notice type="positive">{success}</Notice>
+          </Box>
+        )}
+
+        {/* Disconnect confirm prompt */}
+        {confirmDisconnect && (
+          <Box css={{ marginBottom: 'small' }}>
+            <Notice type="attention">{t('settings.disconnectConfirmBody')}</Notice>
+            <Inline css={{ gap: 'small', marginTop: 'small' }}>
+              <Button type="destructive" onPress={handleDisconnect} disabled={busy}>
+                {busy ? t('settings.disconnecting') : t('settings.disconnect')}
+              </Button>
+              <Button onPress={handleDisconnectCancel}>
+                {t('settings.cancel')}
+              </Button>
+            </Inline>
+          </Box>
+        )}
+
+        {/* Connection flow: not connected, no active code */}
+        {!isConnected && !userCode && !confirmDisconnect && (
           <Box>
             <Box css={{ marginBottom: 'small' }}>
               {t('settings.connectIntro')}
@@ -243,6 +268,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
           </Box>
         )}
 
+        {/* Connection flow: showing user code */}
         {!isConnected && userCode && verificationUri && (
           <Box>
             <Box css={{ marginBottom: 'xsmall' }}>
@@ -259,7 +285,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
                 {t('settings.openStorno')}
               </Link>
             </Box>
-            <Box css={{ marginBottom: 'small' }}>
+            <Box css={{ marginBottom: 'small', color: 'secondary' }}>
               {t('settings.waitingApproval')}
             </Box>
             <Button onPress={handleCancelConnect}>
@@ -268,51 +294,72 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
           </Box>
         )}
 
-        {isConnected && (
+        {/* Connected state */}
+        {isConnected && !confirmDisconnect && (
           <Box>
-            {settings && (
-              <Box css={{ marginBottom: 'small' }}>
-                <Inline css={{ gap: 'small' }}>
-                  <Box css={{ color: 'secondary' }}>{t('settings.companyLabel')}:</Box>
-                  <Box css={{ fontWeight: 'bold' }}>
-                    {settings.company.name} ({settings.company.cif})
-                  </Box>
-                </Inline>
-              </Box>
-            )}
-
             {settingsLoading && (
-              <Box css={{ color: 'secondary', marginBottom: 'small' }}>{t('settings.loadingSettings')}</Box>
-            )}
-
-            {settings && (
-              <Box css={{ marginBottom: 'small' }}>
-                <Inline css={{ gap: 'medium' }}>
-                  <Box>
-                    <Box css={{ fontWeight: 'bold' }}>{t('settings.autoModeTitle')}</Box>
-                    <Box css={{ color: 'secondary' }}>
-                      {t('settings.autoModeDescription')}
-                    </Box>
-                  </Box>
-                  <Switch
-                    checked={settings.autoMode}
-                    onChange={handleAutoModeChange}
-                  />
-                </Inline>
+              <Box css={{ color: 'secondary', marginBottom: 'small' }}>
+                {t('settings.loadingSettings')}
               </Box>
             )}
 
-            <Divider />
+            {settings && (
+              <Box>
+                {/* Company */}
+                <Box css={{ marginBottom: 'small' }}>
+                  <Box css={{ color: 'secondary' }}>{t('settings.companyLabel')}</Box>
+                  <Box css={{ fontWeight: 'bold' }}>
+                    {settings.company.name}
+                  </Box>
+                  {settings.company.cif && (
+                    <Box css={{ color: 'secondary' }}>CIF: {settings.company.cif}</Box>
+                  )}
+                </Box>
 
-            <Box css={{ marginTop: 'small' }}>
-              <Button
-                type="destructive"
-                onPress={handleDisconnect}
-                disabled={busy}
-              >
-                {busy ? t('settings.disconnecting') : t('settings.disconnect')}
-              </Button>
-            </Box>
+                {/* Who authorized + when */}
+                {settings.connectedUser && (
+                  <Box css={{ marginBottom: 'small' }}>
+                    <Box css={{ color: 'secondary' }}>{t('settings.authorizedBy')}</Box>
+                    <Box>{settings.connectedUser.name || settings.connectedUser.email}</Box>
+                    {settings.connectedUser.connectedAt && (
+                      <Box css={{ color: 'secondary' }}>
+                        {t('settings.connectedOn')}: {new Date(settings.connectedUser.connectedAt).toLocaleDateString()}
+                      </Box>
+                    )}
+                  </Box>
+                )}
+
+                <Divider />
+
+                {/* Auto mode */}
+                <Box css={{ marginTop: 'small', marginBottom: 'small' }}>
+                  <Inline css={{ gap: 'medium' }}>
+                    <Box>
+                      <Box css={{ fontWeight: 'bold' }}>{t('settings.autoModeTitle')}</Box>
+                      <Box css={{ color: 'secondary' }}>
+                        {t('settings.autoModeDescription')}
+                      </Box>
+                    </Box>
+                    <Switch
+                      checked={settings.autoMode}
+                      onChange={handleAutoModeChange}
+                    />
+                  </Inline>
+                </Box>
+
+                <Divider />
+
+                <Box css={{ marginTop: 'small' }}>
+                  <Button
+                    type="destructive"
+                    onPress={handleDisconnectConfirm}
+                    disabled={busy}
+                  >
+                    {t('settings.disconnect')}
+                  </Button>
+                </Box>
+              </Box>
+            )}
           </Box>
         )}
       </Box>

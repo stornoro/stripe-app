@@ -12,11 +12,14 @@ import { useEffect, useState, useCallback } from 'react'
 import Stripe from 'stripe'
 import { createHttpClient, STRIPE_API_KEY } from '@stripe/ui-extension-sdk/http_client'
 import {
-  fetchInvoices,
+  fetchInvoiceByStripeId,
   createFromStripeInvoice,
   retryInvoice,
 } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
+import { StatusBadge } from '../components/StatusBadge'
+import { LoadingView, ErrorView, NotConnectedView } from '../components/ViewStates'
 import type { Invoice } from '../types'
 
 interface PaymentInfo {
@@ -29,22 +32,94 @@ interface PaymentInfo {
   stripeInvoiceId: string | null
 }
 
-const STATUS_PIPELINE = [
-  { key: 'draft', label: 'Ciorna' },
-  { key: 'issued', label: 'Emisa' },
-  { key: 'sent_to_anaf', label: 'Trimisa ANAF' },
-  { key: 'validated', label: 'Validata' },
-]
+const STATUS_PIPELINE = ['draft', 'issued', 'sent_to_anaf', 'validated']
 
-function getStatusIndex(status: string): number {
-  const idx = STATUS_PIPELINE.findIndex((s) => s.key === status)
-  return idx >= 0 ? idx : -1
+function getStepIndex(status: string): number {
+  // sent_to_provider is the internal value; treat as sent_to_anaf for pipeline display
+  const normalized = status === 'sent_to_provider' ? 'sent_to_anaf' : status
+  return STATUS_PIPELINE.indexOf(normalized)
+}
+
+function PipelineSteps({ status }: { status: string }) {
+  const t = useT()
+  const isRejected = status === 'rejected'
+  const stepIdx = getStepIndex(status)
+
+  const STEP_LABELS = [
+    t('status.draft'),
+    t('status.issued'),
+    t('status.sent_to_anaf'),
+    t('status.validated'),
+  ]
+
+  return (
+    <Inline css={{ gap: 'xsmall', marginTop: 'xsmall' }}>
+      {STEP_LABELS.map((label, i) => {
+        const isLast = i === STEP_LABELS.length - 1
+        if (isRejected && isLast) {
+          return <Badge key={i} type="negative">{t('status.rejected')}</Badge>
+        }
+        return (
+          <Badge key={i} type={i <= stepIdx ? 'positive' : 'neutral'}>
+            {label}
+          </Badge>
+        )
+      })}
+    </Inline>
+  )
+}
+
+function InvoiceCard({
+  invoice,
+  onRetry,
+  busy,
+}: {
+  invoice: Invoice
+  onRetry: (id: string) => void
+  busy: boolean
+}) {
+  const t = useT()
+  const isRejected = invoice.status === 'rejected'
+  const displayTitle = invoice.invoiceNumber || ('#' + invoice.id.slice(-6))
+
+  return (
+    <Box css={{ marginBottom: 'small' }}>
+      <Inline css={{ gap: 'small' }}>
+        <Box css={{ fontWeight: 'bold' }}>{displayTitle}</Box>
+        <Box css={{ color: 'secondary' }}>{invoice.total} {invoice.currency}</Box>
+      </Inline>
+
+      <PipelineSteps status={invoice.status} />
+
+      {isRejected && (
+        <Box css={{ marginTop: 'xsmall' }}>
+          {(invoice.anafErrorMessage || invoice.anafStatus) && (
+            <Notice type="attention">
+              {t('payment.anafError')}: {invoice.anafErrorMessage || invoice.anafStatus}
+            </Notice>
+          )}
+          <Box css={{ marginTop: 'xsmall' }}>
+            <Button
+              type="primary"
+              size="small"
+              onPress={() => onRetry(invoice.id)}
+              disabled={busy}
+            >
+              {busy ? t('payment.retrying') : t('payment.retryAnaf')}
+            </Button>
+          </Box>
+        </Box>
+      )}
+    </Box>
+  )
 }
 
 const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) => {
+  const t = useT()
   const { loading: authLoading, authenticated, error: authError } = useAuth({ userContext })
   const [payment, setPayment] = useState<PaymentInfo | null>(null)
-  const [matchedInvoices, setMatchedInvoices] = useState<Invoice[]>([])
+  const [linkedInvoice, setLinkedInvoice] = useState<Invoice | null>(null)
+  const [invoiceChecked, setInvoiceChecked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
@@ -55,12 +130,11 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
   useEffect(() => {
     if (authLoading) return
     if (!authenticated) {
-      setError('Nu esti conectat. Mergi la Setari pentru a conecta Storno.ro.')
       setLoading(false)
       return
     }
     if (!objectId) {
-      setError('Nu s-a putut identifica plata.')
+      setError(t('payment.notIdentified'))
       setLoading(false)
       return
     }
@@ -79,10 +153,9 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
 
         const customer = pi.customer as Stripe.Customer | null
         const invoice = pi.invoice as Stripe.Invoice | null
-        const amountStr = (pi.amount / 100).toFixed(2)
 
         setPayment({
-          amount: amountStr,
+          amount: (pi.amount / 100).toFixed(2),
           currency: pi.currency.toUpperCase(),
           status: pi.status,
           customerName: customer?.name ?? null,
@@ -91,20 +164,20 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
           stripeInvoiceId: invoice?.id ?? null,
         })
 
-        const searchTerm = customer?.name || customer?.email
-        if (searchTerm) {
-          const data = await fetchInvoices({ search: searchTerm })
-          setMatchedInvoices(data.data ?? [])
+        if (invoice?.id) {
+          const linked = await fetchInvoiceByStripeId(invoice.id)
+          setLinkedInvoice(linked)
         }
+        setInvoiceChecked(true)
       } catch (e: any) {
-        setError(e.message || 'Eroare la incarcarea datelor platii')
+        setError(e.message || t('payment.loadFailed'))
       } finally {
         setLoading(false)
       }
     }
 
     load()
-  }, [objectId, authLoading, authenticated])
+  }, [objectId, authLoading, authenticated, t])
 
   const handleCreateInvoice = useCallback(async () => {
     if (!payment?.stripeInvoiceId) return
@@ -114,19 +187,19 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
 
     try {
       const result = await createFromStripeInvoice(payment.stripeInvoiceId)
-      setActionMessage({ type: 'positive', text: `e-Factura creata: ${result.invoiceNumber}` })
-
-      const searchTerm = payment.customerName || payment.customerEmail
-      if (searchTerm) {
-        const data = await fetchInvoices({ search: searchTerm })
-        setMatchedInvoices(data.data ?? [])
-      }
+      setActionMessage({
+        type: 'positive',
+        text: t('payment.createSuccess', { number: result.invoiceNumber ?? '' }),
+      })
+      // Refresh the linked invoice
+      const linked = await fetchInvoiceByStripeId(payment.stripeInvoiceId)
+      setLinkedInvoice(linked)
     } catch (e: any) {
       setActionMessage({ type: 'negative', text: e.message })
     } finally {
       setActionBusy(false)
     }
-  }, [payment])
+  }, [payment, t])
 
   const handleRetry = useCallback(async (invoiceId: string) => {
     setActionBusy(true)
@@ -134,38 +207,40 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
 
     try {
       await retryInvoice(invoiceId)
-      setActionMessage({ type: 'positive', text: 'Factura retrimisa la ANAF' })
+      setActionMessage({ type: 'positive', text: t('payment.retrySuccess') })
+      // Refresh
+      if (payment?.stripeInvoiceId) {
+        const linked = await fetchInvoiceByStripeId(payment.stripeInvoiceId)
+        setLinkedInvoice(linked)
+      }
     } catch (e: any) {
       setActionMessage({ type: 'negative', text: e.message })
     } finally {
       setActionBusy(false)
     }
-  }, [])
+  }, [payment, t])
 
   if (authLoading || loading) {
-    return (
-      <ContextView title="Storno.ro">
-        <Box css={{ paddingY: 'medium' }}>
-          <Box css={{ color: 'secondary' }}>Se incarca...</Box>
-        </Box>
-      </ContextView>
-    )
+    return <LoadingView title={t('payment.title')} />
+  }
+
+  if (!authenticated) {
+    return <NotConnectedView title={t('payment.title')} />
   }
 
   if (error || authError) {
-    return (
-      <ContextView title="Storno.ro">
-        <Box css={{ paddingY: 'medium' }}>
-          {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-          <Notice type="attention" title="Eroare" description={error || authError} />
-        </Box>
-      </ContextView>
-    )
+    return <ErrorView title={t('payment.title')} message={error || authError || ''} />
   }
 
+  const stripeStatusLabel =
+    payment?.status === 'succeeded'
+      ? t('stripe.status.succeeded')
+      : payment?.status === 'processing'
+        ? t('stripe.status.processing')
+        : payment?.status ?? ''
+
   return (
-    <ContextView title="Storno.ro - Detalii plata">
-      {/* Payment summary */}
+    <ContextView title={t('payment.title')}>
       {payment && (
         <Box css={{ marginBottom: 'small' }}>
           <Inline css={{ gap: 'small' }}>
@@ -173,111 +248,60 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
               {payment.amount} {payment.currency}
             </Box>
             <Badge type={payment.status === 'succeeded' ? 'positive' : 'warning'}>
-              {payment.status}
+              {stripeStatusLabel}
             </Badge>
           </Inline>
 
           {payment.customerName && (
             <Inline css={{ gap: 'xsmall' }}>
-              <Box css={{ color: 'secondary' }}>Client:</Box>
+              <Box css={{ color: 'secondary' }}>{t('payment.client')}:</Box>
               <Box>{payment.customerName}</Box>
             </Inline>
           )}
 
           {payment.customerEmail && (
             <Inline css={{ gap: 'xsmall' }}>
-              <Box css={{ color: 'secondary' }}>Email:</Box>
+              <Box css={{ color: 'secondary' }}>{t('payment.email')}:</Box>
               <Box>{payment.customerEmail}</Box>
             </Inline>
           )}
         </Box>
       )}
 
-      {/* Action feedback */}
       {actionMessage && (
         <Box css={{ marginBottom: 'small' }}>
-          {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-          <Notice type={actionMessage.type} title={actionMessage.type === 'positive' ? 'Succes' : 'Eroare'} description={actionMessage.text} />
+          <Notice type={actionMessage.type}>{actionMessage.text}</Notice>
         </Box>
       )}
 
       <Divider />
 
-      {/* Matched e-Facturi */}
-      {matchedInvoices.length > 0 ? (
+      <Box css={{ fontWeight: 'bold', marginBottom: 'xsmall' }}>
+        {t('payment.relatedInvoices')}
+      </Box>
+
+      {linkedInvoice ? (
+        <InvoiceCard invoice={linkedInvoice} onRetry={handleRetry} busy={actionBusy} />
+      ) : invoiceChecked ? (
         <Box>
-          <Box css={{ fontWeight: 'bold', marginBottom: 'xsmall' }}>e-Facturi asociate</Box>
-          {matchedInvoices.map((invoice) => {
-            const statusIdx = getStatusIndex(invoice.status)
-            const isRejected = invoice.status === 'rejected'
-            const displayTitle = invoice.invoiceNumber || ('Ciorna #' + invoice.id.slice(-6))
-
-            return (
-              <Box key={invoice.id} css={{ marginBottom: 'small' }}>
-                <Inline css={{ gap: 'small' }}>
-                  <Box css={{ fontWeight: 'bold' }}>{displayTitle}</Box>
-                  <Box css={{ color: 'secondary' }}>{invoice.total} {invoice.currency}</Box>
-                </Inline>
-
-                {/* Status pipeline */}
-                <Inline css={{ gap: 'xsmall', marginTop: 'xsmall' }}>
-                  {STATUS_PIPELINE.map((step, i) => (
-                    <Badge
-                      key={step.key}
-                      type={
-                        isRejected && i === STATUS_PIPELINE.length - 1
-                          ? 'negative'
-                          : i <= statusIdx
-                            ? 'positive'
-                            : 'neutral'
-                      }
-                    >
-                      {isRejected && step.key === 'validated' ? 'Respinsa' : step.label}
-                    </Badge>
-                  ))}
-                </Inline>
-
-                {/* ANAF error + retry */}
-                {isRejected && (
-                  <Box css={{ marginTop: 'xsmall' }}>
-                    {invoice.anafStatus && (
-                      // @ts-expect-error title/description work at runtime but SDK types omit them
-                      <Notice type="negative" title="Eroare ANAF" description={invoice.anafStatus} />
-                    )}
-                    <Box css={{ marginTop: 'xsmall' }}>
-                      <Button
-                        type="primary"
-                        size="small"
-                        onPress={() => handleRetry(invoice.id)}
-                        disabled={actionBusy}
-                      >
-                        {actionBusy ? 'Se retrimite...' : 'Retrimite la ANAF'}
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
+          {!payment?.stripeInvoiceId ? (
+            <Box css={{ color: 'secondary' }}>{t('payment.noStripeInvoice')}</Box>
+          ) : (
+            <>
+              <Box css={{ color: 'secondary', marginBottom: 'small' }}>
+                {t('payment.noInvoices')}
               </Box>
-            )
-          })}
-        </Box>
-      ) : (
-        <Box>
-          <Box css={{ color: 'secondary', marginBottom: 'small' }}>
-            Nicio e-Factura gasita pentru aceasta plata.
-          </Box>
-
-          {/* Manual create button */}
-          {payment?.stripeInvoiceId && (
-            <Button
-              type="primary"
-              onPress={handleCreateInvoice}
-              disabled={actionBusy}
-            >
-              {actionBusy ? 'Se creeaza...' : 'Creeaza e-Factura'}
-            </Button>
+              <Button
+                type="primary"
+                onPress={handleCreateInvoice}
+                disabled={actionBusy}
+              >
+                {actionBusy ? t('payment.creating') : t('payment.createInvoice')}
+              </Button>
+            </>
           )}
         </Box>
-      )}
+      ) : null}
     </ContextView>
   )
 }

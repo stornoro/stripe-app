@@ -1,11 +1,12 @@
 {
   "name": "storno-stripe-app",
-  "version": "2.0.7",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "start": "stripe apps start",
     "typecheck": "tsc --noEmit",
-    "upload": "stripe apps upload"
+    "upload": "stripe apps upload",
+    "test": "jest"
   },
   "dependencies": {
     "@stripe/ui-extension-sdk": "^2.0.0",
@@ -14,8 +15,29 @@
     "stripe": "^14.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "^17.0.0",
     "@types/react-dom": "^17.0.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "typescript": "^5.0.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/src/__tests__/**/*.test.ts"],
+    "moduleNameMapper": {
+      "^@stripe/ui-extension-sdk/http_client$": "<rootDir>/src/__mocks__/@stripe/ui-extension-sdk/http_client.ts",
+      "^stripe$": "<rootDir>/src/__mocks__/stripe.ts"
+    },
+    "globals": {
+      "ts-jest": {
+        "tsconfig": {
+          "jsx": "react-jsx",
+          "esModuleInterop": true,
+          "strict": false
+        }
+      }
+    }
   }
 }
