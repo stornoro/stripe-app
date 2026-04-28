@@ -5,16 +5,16 @@ import {
   Divider,
   Inline,
   Badge,
-  TextField,
   Select,
   Switch,
   Notice,
   Link,
 } from '@stripe/ui-extension-sdk/ui'
 import type { ExtensionContextValue } from '@stripe/ui-extension-sdk/context'
-import { useState, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  exchangeLinkingCode,
+  startDeviceAuthorization,
+  pollDeviceCode,
   disconnect as apiDisconnect,
   clearTokens,
 } from '../api/client'
@@ -22,11 +22,7 @@ import { saveTokens, deleteTokens } from '../api/secretStore'
 import { useAuth } from '../hooks/useAuth'
 import { useSettings } from '../hooks/useSettings'
 
-// Toggle for dev vs production
-const LINK_URL = 'https://localhost:3000/stripe-link'
-// const LINK_URL = 'https://app.storno.ro/stripe-link'
-
-const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
+const SettingsView = ({ userContext }: ExtensionContextValue) => {
   const {
     loading: authLoading,
     authenticated,
@@ -35,13 +31,17 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
     stripeAccountId,
   } = useAuth({ userContext })
 
-  const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [justConnected, setJustConnected] = useState(false)
   const [justDisconnected, setJustDisconnected] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined)
+  const [userCode, setUserCode] = useState<string | null>(null)
+  const [verificationUri, setVerificationUri] = useState<string | null>(null)
+
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelledRef = useRef(false)
 
   const isConnected = (authenticated || justConnected) && !justDisconnected
   const {
@@ -51,29 +51,111 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
     updateSettings,
   } = useSettings(isConnected)
 
-  const handleConnect = useCallback(async () => {
-    if (!code.trim() || code.trim().length !== 6) {
-      setError('Introdu un cod valid de 6 caractere.')
-      return
+  const stopPolling = useCallback(() => {
+    cancelledRef.current = true
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
     }
+  }, [])
+
+  useEffect(() => () => stopPolling(), [stopPolling])
+
+  const handleConnect = useCallback(async () => {
+    // Open the popup *synchronously* on the click so browsers don't block it
+    // for missing user gesture; navigate it once we have the verification URL.
+    const popup = window.open('', '_blank')
 
     setBusy(true)
     setError(null)
     setSuccess(null)
+    setUserCode(null)
+    setVerificationUri(null)
+    cancelledRef.current = false
 
+    let auth
     try {
-      const tokens = await exchangeLinkingCode(code.trim(), stripeAccountId)
-      await saveTokens(userId, tokens)
-      setJustConnected(true)
-      setJustDisconnected(false)
-      setCode('')
-      setSuccess('Conectat cu succes!')
+      auth = await startDeviceAuthorization(stripeAccountId)
     } catch (e: any) {
-      setError(e.message || 'Conectarea a esuat. Verifica codul.')
-    } finally {
+      if (popup) popup.close()
+      setError(e.message || 'Nu s-a putut initia autentificarea.')
       setBusy(false)
+      return
     }
-  }, [code, stripeAccountId, userId])
+
+    setUserCode(auth.user_code)
+    setVerificationUri(auth.verification_uri_complete)
+
+    if (popup) {
+      try { popup.location.href = auth.verification_uri_complete } catch { /* fall back to manual Link */ }
+    }
+
+    let interval = Math.max(2, auth.interval) * 1000
+    const deadline = Date.now() + auth.expires_in * 1000
+
+    const tick = async () => {
+      if (cancelledRef.current) return
+
+      if (Date.now() > deadline) {
+        setError('Codul a expirat. Reincearca.')
+        setBusy(false)
+        setUserCode(null)
+        setVerificationUri(null)
+        return
+      }
+
+      const result = await pollDeviceCode(auth.device_code, stripeAccountId)
+      if (cancelledRef.current) return
+
+      switch (result.kind) {
+        case 'tokens':
+          await saveTokens(userId, result.tokens).catch(() => {})
+          setJustConnected(true)
+          setJustDisconnected(false)
+          setSuccess('Conectat cu succes!')
+          setUserCode(null)
+          setVerificationUri(null)
+          setBusy(false)
+          return
+        case 'denied':
+          setError('Autorizarea a fost refuzata.')
+          setBusy(false)
+          setUserCode(null)
+          setVerificationUri(null)
+          return
+        case 'expired':
+          setError('Codul a expirat. Reincearca.')
+          setBusy(false)
+          setUserCode(null)
+          setVerificationUri(null)
+          return
+        case 'slow_down':
+          interval += 1000
+          break
+        case 'error':
+          setError(result.message)
+          setBusy(false)
+          setUserCode(null)
+          setVerificationUri(null)
+          return
+        case 'pending':
+        default:
+          break
+      }
+
+      pollTimerRef.current = setTimeout(tick, interval)
+    }
+
+    pollTimerRef.current = setTimeout(tick, interval)
+  }, [stripeAccountId, userId])
+
+  const handleCancelConnect = useCallback(() => {
+    stopPolling()
+    setBusy(false)
+    setUserCode(null)
+    setVerificationUri(null)
+    setError(null)
+  }, [stopPolling])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
@@ -121,7 +203,6 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
   )
 
   const handleSave = useCallback(() => {
-    // Settings are auto-saved on change, so this is a no-op
     setStatusMessage('Salvat')
     setTimeout(() => setStatusMessage(undefined), 2000)
   }, [])
@@ -139,7 +220,6 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
   return (
     <SettingsViewContainer onSave={handleSave} statusMessage={statusMessage}>
       <Box css={{ padding: 'medium' }}>
-        {/* Connection status */}
         <Inline css={{ gap: 'medium' }}>
           <Box css={{ fontWeight: 'bold' }}>Status conexiune</Box>
           <Badge type={isConnected ? 'positive' : 'neutral'}>
@@ -149,7 +229,6 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
 
         <Divider />
 
-        {/* Errors & Success */}
         {(error || authError || settingsError) && (
           <Box css={{ marginBottom: 'small' }}>
             {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
@@ -163,54 +242,53 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
           </Box>
         )}
 
-        {/* Not connected: Linking code flow */}
-        {!isConnected && (
+        {!isConnected && !userCode && (
           <Box>
             <Box css={{ marginBottom: 'medium' }}>
               Conecteaza contul tau Storno.ro pentru a genera automat
               e-Facturi din facturile Stripe.
             </Box>
-
-            <Box css={{ marginBottom: 'medium' }}>
-              <Box css={{ fontWeight: 'bold' }}>Pas 1: Obtine codul</Box>
-              <Box css={{ marginTop: 'xsmall' }}>
-                Deschide link-ul de mai jos si logheaza-te in Storno.ro.
-                Vei primi un cod de 6 caractere.
-              </Box>
-              <Box css={{ marginTop: 'xsmall' }}>
-                <Link href={LINK_URL} target="_blank" type="primary">
-                  Deschide Storno.ro
-                </Link>
-              </Box>
-            </Box>
-
-            <Box>
-              <Box css={{ fontWeight: 'bold' }}>Pas 2: Introdu codul</Box>
-              <Box css={{ marginTop: 'xsmall' }}>
-                <TextField
-                  label="Cod de conectare"
-                  placeholder="ABC123"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                />
-              </Box>
-              <Box css={{ marginTop: 'xsmall' }}>
-                <Button
-                  type="primary"
-                  onPress={handleConnect}
-                  disabled={busy || code.trim().length !== 6}
-                >
-                  {busy ? 'Se conecteaza...' : 'Conecteaza'}
-                </Button>
-              </Box>
-            </Box>
+            <Button
+              type="primary"
+              onPress={handleConnect}
+              disabled={busy}
+            >
+              {busy ? 'Se initiaza...' : 'Conecteaza Storno.ro'}
+            </Button>
           </Box>
         )}
 
-        {/* Connected: Settings */}
+        {!isConnected && userCode && verificationUri && (
+          <Box>
+            <Box css={{ marginBottom: 'small' }}>
+              Codul tau de autorizare:
+            </Box>
+            <Box css={{
+              fontFamily: 'monospace',
+              fontWeight: 'bold',
+              marginBottom: 'medium',
+            }}>
+              {userCode}
+            </Box>
+            <Box css={{ marginBottom: 'small' }}>
+              Daca fereastra Storno.ro nu s-a deschis automat:
+            </Box>
+            <Box css={{ marginBottom: 'medium' }}>
+              <Link href={verificationUri} target="_blank" type="primary">
+                Deschide Storno.ro pentru autorizare
+              </Link>
+            </Box>
+            <Box css={{ marginBottom: 'small' }}>
+              Asteptam confirmarea ta in fereastra Storno.ro...
+            </Box>
+            <Button onPress={handleCancelConnect}>
+              Anuleaza
+            </Button>
+          </Box>
+        )}
+
         {isConnected && (
           <Box>
-            {/* Company selector */}
             {settings && settings.companies.length > 0 && (
               <Box css={{ marginBottom: 'medium' }}>
                 <Select
@@ -232,7 +310,6 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
               <Box css={{ padding: 'small' }}>Se incarca setarile...</Box>
             )}
 
-            {/* Auto mode toggle */}
             {settings && (
               <Box css={{ marginBottom: 'medium' }}>
                 <Inline css={{ gap: 'medium' }}>
@@ -252,7 +329,6 @@ const SettingsView = ({ userContext, environment }: ExtensionContextValue) => {
 
             <Divider />
 
-            {/* Disconnect */}
             <Box css={{ marginTop: 'medium' }}>
               <Button
                 type="destructive"

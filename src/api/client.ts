@@ -31,6 +31,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   no_company: 'Selecteaza o companie din Setari.',
   creation_failed: 'Eroare la crearea facturii.',
   retry_failed: 'Eroare la retrimiterea facturii.',
+  authorization_pending: 'In asteptarea autorizarii.',
+  slow_down: 'Asteapta inainte de a reincerca.',
+  expired_token: 'Codul a expirat. Reincepeti autorizarea.',
+  access_denied: 'Autorizarea a fost refuzata.',
 }
 
 function extractError(body: Record<string, any>, status: number): string {
@@ -135,27 +139,67 @@ export async function exchangeJwtForTokens(
   return tokens
 }
 
-export async function exchangeLinkingCode(
-  code: string,
+export interface DeviceAuthorization {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  verification_uri_complete: string
+  expires_in: number
+  interval: number
+}
+
+export async function startDeviceAuthorization(
   stripeAccountId: string,
-): Promise<AuthTokens> {
-  const response = await safeFetch(`${API_BASE}/stripe-app/token`, {
+): Promise<DeviceAuthorization> {
+  const response = await safeFetch(`${API_BASE}/stripe-app/oauth/device`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'linking_code',
-      code: code.toUpperCase().trim(),
-      stripe_account_id: stripeAccountId,
-    }),
+    body: JSON.stringify({ stripe_account_id: stripeAccountId }),
   })
 
   if (!response.ok) {
     await throwApiError(response)
   }
 
-  const tokens: AuthTokens = await response.json()
-  currentTokens = tokens
-  return tokens
+  return response.json()
+}
+
+export type DevicePollResult =
+  | { kind: 'pending' }
+  | { kind: 'slow_down' }
+  | { kind: 'denied' }
+  | { kind: 'expired' }
+  | { kind: 'tokens'; tokens: AuthTokens }
+  | { kind: 'error'; message: string }
+
+export async function pollDeviceCode(
+  deviceCode: string,
+  stripeAccountId: string,
+): Promise<DevicePollResult> {
+  const response = await safeFetch(`${API_BASE}/stripe-app/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'device_code',
+      device_code: deviceCode,
+      stripe_account_id: stripeAccountId,
+    }),
+  })
+
+  if (response.ok) {
+    const tokens: AuthTokens = await response.json()
+    currentTokens = tokens
+    return { kind: 'tokens', tokens }
+  }
+
+  const body = await response.json().catch(() => ({}))
+  switch (body?.error) {
+    case 'authorization_pending': return { kind: 'pending' }
+    case 'slow_down': return { kind: 'slow_down' }
+    case 'access_denied': return { kind: 'denied' }
+    case 'expired_token': return { kind: 'expired' }
+    default: return { kind: 'error', message: extractError(body, response.status) }
+  }
 }
 
 export async function disconnect(stripeAccountId: string): Promise<void> {

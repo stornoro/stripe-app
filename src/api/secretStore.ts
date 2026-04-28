@@ -32,9 +32,11 @@ export async function loadTokens(userId: string): Promise<AuthTokens | null> {
   const stripe = getStripeClient()
 
   try {
+    // expand=payload is required — `find` returns metadata only by default
     const secret = await stripe.apps.secrets.find({
       name: TOKEN_KEY,
       ...secretScope(userId),
+      expand: ['payload'],
     })
 
     if (secret?.payload) {

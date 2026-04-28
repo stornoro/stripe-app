@@ -29,7 +29,7 @@
   "ui_extension": {
     "content_security_policy": {
       "connect-src": [
-        "https://api.storno.ro/api/v1"
+        "https://api.storno.ro/api/"
       ],
       "image-src": null,
       "purpose": "Communicate with Storno.ro backend API"
@@ -53,5 +53,5 @@
       }
     ]
   },
-  "version": "2.0.1"
+  "version": "2.0.6"
 }
