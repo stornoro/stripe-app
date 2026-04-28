@@ -7,8 +7,6 @@ import {
   Badge,
   Divider,
   Notice,
-  Tab,
-  TabPanel,
   Button,
 } from '@stripe/ui-extension-sdk/ui'
 import type { ExtensionContextValue } from '@stripe/ui-extension-sdk/context'
@@ -128,6 +126,8 @@ function InvoiceList({
   )
 }
 
+type TabKey = 'all' | 'pending' | 'errors'
+
 const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   const t = useT()
   const { loading: authLoading, authenticated, error: authError } = useAuth({ userContext })
@@ -136,6 +136,7 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   const [error, setError] = useState<string | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [retryMessage, setRetryMessage] = useState<{ type: 'positive' | 'negative'; text: string } | null>(null)
+  const [activeTab, setActiveTab] = useState<TabKey>('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -244,34 +245,54 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
         </Box>
       </Inline>
 
-      <Tab key="all">{t('overview.tabAll')} ({allInvoices.length})</Tab>
-      <Tab key="pending">{t('overview.tabPending')} ({pendingInvoices.length})</Tab>
-      <Tab key="errors">{t('overview.tabErrors')} ({errorInvoices.length})</Tab>
+      <Inline css={{ gap: 'xsmall', marginBottom: 'small' }}>
+        <Button
+          type={activeTab === 'all' ? 'primary' : 'secondary'}
+          size="small"
+          onPress={() => setActiveTab('all')}
+        >
+          {t('overview.tabAll')} ({allInvoices.length})
+        </Button>
+        <Button
+          type={activeTab === 'pending' ? 'primary' : 'secondary'}
+          size="small"
+          onPress={() => setActiveTab('pending')}
+        >
+          {t('overview.tabPending')} ({pendingInvoices.length})
+        </Button>
+        <Button
+          type={activeTab === 'errors' ? 'primary' : 'secondary'}
+          size="small"
+          onPress={() => setActiveTab('errors')}
+        >
+          {t('overview.tabErrors')} ({errorInvoices.length})
+        </Button>
+      </Inline>
 
-      <TabPanel key="all">
+      {activeTab === 'all' && (
         <InvoiceList
           invoices={allInvoices}
           emptyKey="overview.empty"
           onRetry={handleRetry}
           retryingId={retryingId}
         />
-      </TabPanel>
-      <TabPanel key="pending">
+      )}
+      {activeTab === 'pending' && (
         <InvoiceList
           invoices={pendingInvoices}
           emptyKey="overview.pendingEmpty"
           onRetry={handleRetry}
           retryingId={retryingId}
         />
-      </TabPanel>
-      <TabPanel key="errors">
+      )}
+      {activeTab === 'errors' && (
         <InvoiceList
           invoices={errorInvoices}
           emptyKey="overview.errorsEmpty"
           onRetry={handleRetry}
           retryingId={retryingId}
         />
-      </TabPanel>
+      )}
     </ContextView>
   )
 }
