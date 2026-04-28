@@ -2,7 +2,7 @@
   "connect_permissions": null,
   "distribution_type": "private",
   "icon": "./icon.png",
-  "id": "com.storno.stripe-app",
+  "id": "com.storno.stripe",
   "name": "Storno",
   "permissions": [
     {
@@ -61,5 +61,5 @@
       }
     ]
   },
-  "version": "3.0.8"
+  "version": "1.0.0"
 }
