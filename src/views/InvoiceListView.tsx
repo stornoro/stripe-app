@@ -2,8 +2,6 @@ import {
   Box,
   ContextView,
   Inline,
-  List,
-  ListItem,
   Badge,
   Divider,
   Notice,
@@ -38,8 +36,8 @@ function invoiceTitle(invoice: DashboardInvoice): string {
 
 function invoiceSubtitle(invoice: DashboardInvoice): string {
   const parts: string[] = []
-  if (invoice.issueDate) parts.push(invoice.issueDate)
   if (invoice.invoiceNumber && invoice.receiverName) parts.push(invoice.receiverName)
+  if (invoice.issueDate) parts.push(invoice.issueDate)
   return parts.join(' · ')
 }
 
@@ -59,37 +57,36 @@ function InvoiceRow({
   const busy = retryingId === invoice.id
 
   return (
-    <ListItem
-      id={invoice.id}
-      value={
-        <Inline css={{ gap: 'xsmall' }}>
+    <Box css={{ paddingY: 'small' }}>
+      {/* @ts-expect-error justifyContent is a valid CSS prop, SDK token type is overly narrow */}
+      <Inline css={{ gap: 'small', alignY: 'center', justifyContent: 'space-between' }}>
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>{title}</Box>
+          {subtitle && <Box css={{ color: 'secondary' }}>{subtitle}</Box>}
+        </Box>
+        <Inline css={{ gap: 'xsmall', alignY: 'center' }}>
           <Box>{invoice.total} {invoice.currency}</Box>
           <StatusBadge status={invoice.status} />
         </Inline>
-      }
-    >
-      <Box>
-        <Box css={{ fontWeight: 'bold' }}>{title}</Box>
-        {subtitle ? <Box css={{ color: 'secondary' }}>{subtitle}</Box> : null}
-        {isRejected && (
+      </Inline>
+      {isRejected && (
+        <Box css={{ marginTop: 'xsmall' }}>
+          {invoice.anafErrorMessage && (
+            <Box css={{ color: 'secondary' }}>{invoice.anafErrorMessage}</Box>
+          )}
           <Box css={{ marginTop: 'xsmall' }}>
-            {invoice.anafErrorMessage && (
-              <Box css={{ color: 'secondary' }}>{invoice.anafErrorMessage}</Box>
-            )}
-            <Box css={{ marginTop: 'xsmall' }}>
-              <Button
-                type="primary"
-                size="small"
-                onPress={() => onRetry(invoice.id)}
-                disabled={busy}
-              >
-                {busy ? t('overview.retrying') : t('overview.retry')}
-              </Button>
-            </Box>
+            <Button
+              type="primary"
+              size="small"
+              onPress={() => onRetry(invoice.id)}
+              disabled={busy}
+            >
+              {busy ? t('overview.retrying') : t('overview.retry')}
+            </Button>
           </Box>
-        )}
-      </Box>
-    </ListItem>
+        </Box>
+      )}
+    </Box>
   )
 }
 
@@ -107,22 +104,33 @@ function InvoiceList({
   const t = useT()
   if (invoices.length === 0) {
     return (
-      <Box css={{ paddingY: 'small' }}>
+      <Box css={{ paddingY: 'medium' }}>
         <Box css={{ color: 'secondary' }}>{t(emptyKey)}</Box>
       </Box>
     )
   }
   return (
-    <List>
-      {invoices.map((invoice) => (
-        <InvoiceRow
-          key={invoice.id}
-          invoice={invoice}
-          onRetry={onRetry}
-          retryingId={retryingId}
-        />
+    <Box>
+      {invoices.map((invoice, idx) => (
+        <Box key={invoice.id}>
+          {idx > 0 && <Divider />}
+          <InvoiceRow
+            invoice={invoice}
+            onRetry={onRetry}
+            retryingId={retryingId}
+          />
+        </Box>
       ))}
-    </List>
+    </Box>
+  )
+}
+
+function CountCell({ value, label }: { value: number; label: string }) {
+  return (
+    <Box>
+      <Box css={{ fontWeight: 'bold' }}>{value}</Box>
+      <Box css={{ color: 'secondary' }}>{label}</Box>
+    </Box>
   )
 }
 
@@ -199,53 +207,33 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
     ? { type: 'positive' as const, label: t('overview.autoModeOn') }
     : { type: 'neutral' as const, label: t('overview.autoModeOff') }
 
-  const descriptionParts: string[] = []
-  if (stats.companyName) descriptionParts.push(stats.companyName)
-
   return (
     <ContextView
       title={t('overview.title')}
-      description={descriptionParts.join(' — ') || undefined}
+      description={stats.companyName ?? undefined}
     >
       {retryMessage && (
         <Box css={{ marginBottom: 'small' }}>
-          <Notice type={retryMessage.type}>{retryMessage.text}</Notice>
+          {/* @ts-expect-error description prop works at runtime */}
+          <Notice type={retryMessage.type} description={retryMessage.text} />
         </Box>
       )}
 
-      {/* Auto-mode indicator + status counts */}
-      <Inline css={{ gap: 'xsmall', marginBottom: 'small' }}>
+      <Inline css={{ gap: 'small', marginBottom: 'medium' }}>
         <Badge type={autoModeBadge.type}>{autoModeBadge.label}</Badge>
       </Inline>
 
-      <Inline css={{ gap: 'medium', marginBottom: 'small' }}>
-        <Box>
-          <Box css={{ fontWeight: 'bold' }}>{counts.validated}</Box>
-          <Box css={{ color: 'secondary' }}>{t('overview.countsValidated')}</Box>
-        </Box>
-        <Divider />
-        <Box>
-          <Box css={{ fontWeight: 'bold' }}>{counts.sent_to_anaf}</Box>
-          <Box css={{ color: 'secondary' }}>{t('overview.countsPending')}</Box>
-        </Box>
-        <Divider />
-        <Box>
-          <Box css={{ fontWeight: 'bold' }}>{counts.rejected}</Box>
-          <Box css={{ color: 'secondary' }}>{t('overview.countsRejected')}</Box>
-        </Box>
-        <Divider />
-        <Box>
-          <Box css={{ fontWeight: 'bold' }}>{counts.issued}</Box>
-          <Box css={{ color: 'secondary' }}>{t('overview.countsIssued')}</Box>
-        </Box>
-        <Divider />
-        <Box>
-          <Box css={{ fontWeight: 'bold' }}>{counts.draft}</Box>
-          <Box css={{ color: 'secondary' }}>{t('overview.countsDraft')}</Box>
-        </Box>
+      <Inline css={{ gap: 'large', marginBottom: 'medium' }}>
+        <CountCell value={counts.validated} label={t('overview.countsValidated')} />
+        <CountCell value={counts.sent_to_anaf} label={t('overview.countsPending')} />
+        <CountCell value={counts.rejected} label={t('overview.countsRejected')} />
+        <CountCell value={counts.issued} label={t('overview.countsIssued')} />
+        <CountCell value={counts.draft} label={t('overview.countsDraft')} />
       </Inline>
 
-      <Inline css={{ gap: 'xsmall', marginBottom: 'small' }}>
+      <Divider />
+
+      <Inline css={{ gap: 'xsmall', marginY: 'small' }}>
         <Button
           type={activeTab === 'all' ? 'primary' : 'secondary'}
           size="small"
@@ -268,6 +256,8 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
           {t('overview.tabErrors')} ({errorInvoices.length})
         </Button>
       </Inline>
+
+      <Divider />
 
       {activeTab === 'all' && (
         <InvoiceList
