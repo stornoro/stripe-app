@@ -2,8 +2,6 @@ import {
   Box,
   ContextView,
   Inline,
-  List,
-  ListItem,
   Badge,
   Divider,
   Button,
@@ -48,43 +46,44 @@ function CycleRow({
   )
 
   return (
-    <ListItem
-      id={cycle.stripeInvoiceId}
-      value={stornoValue}
-    >
-      <Box>
-        <Box css={{ fontWeight: 'bold' }}>
-          {formatPeriod(cycle.stripePeriodStart, cycle.stripePeriodEnd)}
+    <Box css={{ paddingY: 'small' }}>
+      {/* @ts-expect-error justifyContent is a valid CSS prop, SDK token type is overly narrow */}
+      <Inline css={{ gap: 'small', alignY: 'center', justifyContent: 'space-between' }}>
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>
+            {formatPeriod(cycle.stripePeriodStart, cycle.stripePeriodEnd)}
+          </Box>
+          <Inline css={{ gap: 'xsmall' }}>
+            <Box css={{ color: 'secondary' }}>
+              {cycle.stripeAmount.toFixed(2)} {cycle.stripeCurrency}
+            </Box>
+            <Badge type={cycle.stripeStatus === 'paid' ? 'positive' : 'neutral'}>
+              {cycle.stripeStatus}
+            </Badge>
+          </Inline>
         </Box>
-        <Inline css={{ gap: 'xsmall' }}>
-          <Box css={{ color: 'secondary' }}>
-            {cycle.stripeAmount.toFixed(2)} {cycle.stripeCurrency}
-          </Box>
-          <Badge type={cycle.stripeStatus === 'paid' ? 'positive' : 'neutral'}>
-            {cycle.stripeStatus}
-          </Badge>
-        </Inline>
+        <Box>{stornoValue}</Box>
+      </Inline>
 
-        {cycle.stornoInvoice ? (
-          <Box css={{ color: 'secondary' }}>
-            {cycle.stornoInvoice.invoiceNumber || ('#' + cycle.stornoInvoice.id.slice(-6))}
-          </Box>
-        ) : !busy && !created ? (
-          <Box css={{ marginTop: 'xsmall' }}>
-            <Button
-              type="primary"
-              size="small"
-              onPress={() => onCreateInvoice(cycle.stripeInvoiceId)}
-              disabled={!!creatingId}
-            >
-              {t('subscription.createInvoice')}
-            </Button>
-          </Box>
-        ) : busy ? (
-          <Box css={{ color: 'secondary' }}>{t('subscription.creating')}</Box>
-        ) : null}
-      </Box>
-    </ListItem>
+      {cycle.stornoInvoice ? (
+        <Box css={{ color: 'secondary' }}>
+          {cycle.stornoInvoice.invoiceNumber || ('#' + cycle.stornoInvoice.id.slice(-6))}
+        </Box>
+      ) : !busy && !created ? (
+        <Box css={{ marginTop: 'xsmall' }}>
+          <Button
+            type="primary"
+            size="small"
+            onPress={() => onCreateInvoice(cycle.stripeInvoiceId)}
+            disabled={!!creatingId}
+          >
+            {t('subscription.createInvoice')}
+          </Button>
+        </Box>
+      ) : busy ? (
+        <Box css={{ color: 'secondary' }}>{t('subscription.creating')}</Box>
+      ) : null}
+    </Box>
   )
 }
 
@@ -232,17 +231,19 @@ const SubscriptionDetailView = ({ userContext, environment }: ExtensionContextVa
       {cycles.length === 0 ? (
         <Box css={{ color: 'secondary' }}>{t('subscription.noCycles')}</Box>
       ) : (
-        <List>
-          {cycles.map((cycle) => (
-            <CycleRow
-              key={cycle.stripeInvoiceId}
-              cycle={cycle}
-              onCreateInvoice={handleCreateInvoice}
-              creatingId={creatingId}
-              successId={successId}
-            />
+        <Box>
+          {cycles.map((cycle, idx) => (
+            <Box key={cycle.stripeInvoiceId}>
+              {idx > 0 && <Divider />}
+              <CycleRow
+                cycle={cycle}
+                onCreateInvoice={handleCreateInvoice}
+                creatingId={creatingId}
+                successId={successId}
+              />
+            </Box>
           ))}
-        </List>
+        </Box>
       )}
     </ContextView>
   )

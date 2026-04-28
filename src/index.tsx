@@ -1,7 +1,6 @@
 export { default as ClientDetailView } from './views/ClientDetailView'
 export { default as InvoiceDetailView } from './views/InvoiceDetailView'
 export { default as InvoiceListView } from './views/InvoiceListView'
-export { default as RefundDetailView } from './views/RefundDetailView'
 export { default as SettingsView } from './views/SettingsView'
 export { default as StripeInvoiceDetailView } from './views/StripeInvoiceDetailView'
 export { default as SubscriptionDetailView } from './views/SubscriptionDetailView'

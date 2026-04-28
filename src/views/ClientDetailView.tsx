@@ -2,8 +2,6 @@ import {
   Box,
   ContextView,
   Inline,
-  List,
-  ListItem,
   Badge,
   Divider,
   Notice,
@@ -222,29 +220,30 @@ const ClientDetailView = ({ userContext, environment }: ExtensionContextValue) =
       {invoices.length === 0 ? (
         <Box css={{ color: 'secondary' }}>{t('client.noInvoices')}</Box>
       ) : (
-        <List>
-          {invoices.map((invoice) => {
+        <Box>
+          {invoices.map((invoice, idx) => {
             const title = invoiceTitle(invoice)
             const subtitle = invoiceSubtitle(invoice)
             return (
-              <ListItem
-                key={invoice.id}
-                id={invoice.id}
-                value={
-                  <Inline css={{ gap: 'xsmall' }}>
-                    <Box>{invoice.total} {invoice.currency}</Box>
-                    <StatusBadge status={invoice.status} />
+              <Box key={invoice.id}>
+                {idx > 0 && <Divider />}
+                <Box css={{ paddingY: 'small' }}>
+                  {/* @ts-expect-error justifyContent is a valid CSS prop, SDK token type is overly narrow */}
+                  <Inline css={{ gap: 'small', alignY: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Box css={{ fontWeight: 'bold' }}>{title}</Box>
+                      {subtitle ? <Box css={{ color: 'secondary' }}>{subtitle}</Box> : null}
+                    </Box>
+                    <Inline css={{ gap: 'xsmall', alignY: 'center' }}>
+                      <Box>{invoice.total} {invoice.currency}</Box>
+                      <StatusBadge status={invoice.status} />
+                    </Inline>
                   </Inline>
-                }
-              >
-                <Box>
-                  <Box css={{ fontWeight: 'bold' }}>{title}</Box>
-                  {subtitle ? <Box css={{ color: 'secondary' }}>{subtitle}</Box> : null}
                 </Box>
-              </ListItem>
+              </Box>
             )
           })}
-        </List>
+        </Box>
       )}
     </ContextView>
   )
