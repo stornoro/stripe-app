@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { AppSettings } from '../types'
 import { fetchSettings, updateSettings as apiUpdateSettings } from '../api/client'
+import { setLocale, t } from '../i18n'
 
 interface UseSettingsResult {
   settings: AppSettings | null
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
-  updateSettings: (data: { defaultCompanyId?: string; autoMode?: boolean }) => Promise<void>
+  updateSettings: (data: { autoMode?: boolean }) => Promise<void>
 }
 
 export function useSettings(authenticated: boolean): UseSettingsResult {
@@ -24,8 +25,9 @@ export function useSettings(authenticated: boolean): UseSettingsResult {
     try {
       const data = await fetchSettings()
       setSettings(data)
+      if (data?.locale) setLocale(data.locale)
     } catch (e: any) {
-      setError(e.message || 'Eroare la incarcarea setarilor')
+      setError(e.message || t('common.dataLoadFailed'))
     } finally {
       setLoading(false)
     }
@@ -35,23 +37,16 @@ export function useSettings(authenticated: boolean): UseSettingsResult {
     load()
   }, [load])
 
-  const update = useCallback(async (data: { defaultCompanyId?: string; autoMode?: boolean }) => {
+  const update = useCallback(async (data: { autoMode?: boolean }) => {
     setError(null)
 
     try {
       const result = await apiUpdateSettings(data)
-      // Merge with existing settings
       setSettings((prev) =>
-        prev
-          ? {
-              ...prev,
-              autoMode: result.autoMode,
-              defaultCompanyId: result.defaultCompanyId,
-            }
-          : prev,
+        prev ? { ...prev, autoMode: result.autoMode } : prev,
       )
     } catch (e: any) {
-      setError(e.message || 'Eroare la salvarea setarilor')
+      setError(e.message || t('common.dataLoadFailed'))
       throw e
     }
   }, [])

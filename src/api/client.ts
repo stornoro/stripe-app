@@ -1,5 +1,7 @@
 import type { AuthTokens, Invoice, Client, AppSettings, DashboardStats } from '../types'
 import { API_BASE } from '../config'
+import { t } from '../i18n'
+import type { TranslationKey } from '../i18n/en'
 
 let currentTokens: AuthTokens | null = null
 
@@ -21,37 +23,39 @@ export function isAuthenticated(): boolean {
 
 // --- Error handling ---
 
-const ERROR_MESSAGES: Record<string, string> = {
-  unauthorized: 'Sesiunea a expirat. Reconecteaza-te din Setari.',
-  invalid_request: 'Cerere invalida. Verifica datele introduse.',
-  invalid_grant: 'Cod invalid sau expirat.',
-  unsupported_grant_type: 'Tip de autentificare nesuportat.',
-  not_found: 'Resursa nu a fost gasita.',
-  forbidden: 'Nu ai permisiunea pentru aceasta actiune.',
-  no_company: 'Selecteaza o companie din Setari.',
-  creation_failed: 'Eroare la crearea facturii.',
-  retry_failed: 'Eroare la retrimiterea facturii.',
-  authorization_pending: 'In asteptarea autorizarii.',
-  slow_down: 'Asteapta inainte de a reincerca.',
-  expired_token: 'Codul a expirat. Reincepeti autorizarea.',
-  access_denied: 'Autorizarea a fost refuzata.',
-}
+const ERROR_KEYS = new Set<TranslationKey>([
+  'error.unauthorized',
+  'error.invalid_request',
+  'error.invalid_grant',
+  'error.unsupported_grant_type',
+  'error.not_found',
+  'error.forbidden',
+  'error.no_company',
+  'error.creation_failed',
+  'error.retry_failed',
+  'error.authorization_pending',
+  'error.slow_down',
+  'error.expired_token',
+  'error.access_denied',
+])
 
 function extractError(body: Record<string, any>, status: number): string {
-  // Prefer backend's message (already in Romanian)
+  // Prefer a localized message from a known error code over the backend's
+  // free-text message (which is currently always Romanian).
+  if (body.error) {
+    const key = `error.${body.error}` as TranslationKey
+    if (ERROR_KEYS.has(key)) return t(key)
+  }
   if (body.message) return body.message
-  // Map error code to user-friendly message
-  if (body.error && ERROR_MESSAGES[body.error]) return ERROR_MESSAGES[body.error]
   if (body.error) return body.error
-  // Fallback with status code
-  return `Eroare server (${status})`
+  return t('error.serverGeneric', { status })
 }
 
 async function safeFetch(url: string, options: RequestInit): Promise<Response> {
   try {
     return await fetch(url, options)
   } catch {
-    throw new Error('Eroare de conexiune. Verifica conexiunea la internet si incearca din nou.')
+    throw new Error(t('error.network'))
   }
 }
 
@@ -64,7 +68,7 @@ async function throwApiError(response: Response): Promise<never> {
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!currentTokens) {
-    throw new Error('Nu esti autentificat. Conecteaza-te din Setari.')
+    throw new Error(t('error.unauthorized'))
   }
 
   const response = await safeFetch(`${API_BASE}${path}`, {
@@ -81,7 +85,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     if (refreshed) {
       return apiFetch(path, options)
     }
-    throw new Error('Sesiunea a expirat. Reconecteaza-te din Setari.')
+    throw new Error(t('error.unauthorized'))
   }
 
   if (!response.ok) {
@@ -226,9 +230,8 @@ export async function fetchSettings(): Promise<AppSettings> {
 }
 
 export async function updateSettings(settings: {
-  defaultCompanyId?: string
   autoMode?: boolean
-}): Promise<{ autoMode: boolean; defaultCompanyId: string | null }> {
+}): Promise<{ autoMode: boolean }> {
   return apiFetch('/stripe-app/settings', {
     method: 'PUT',
     body: JSON.stringify(settings),

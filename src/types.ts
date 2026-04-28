@@ -42,8 +42,8 @@ export interface Company {
 
 export interface AppSettings {
   autoMode: boolean
-  defaultCompanyId: string | null
-  companies: Company[]
+  company: Company
+  locale: string | null
 }
 
 export interface DashboardStats {

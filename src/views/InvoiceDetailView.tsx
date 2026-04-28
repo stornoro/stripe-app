@@ -145,8 +145,8 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
   if (authLoading || loading) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
-          <Box>Se incarca...</Box>
+        <Box css={{ paddingY: 'medium' }}>
+          <Box css={{ color: 'secondary' }}>Se incarca...</Box>
         </Box>
       </ContextView>
     )
@@ -155,7 +155,7 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
   if (error || authError) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
+        <Box css={{ paddingY: 'medium' }}>
           {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
           <Notice type="attention" title="Eroare" description={error || authError} />
         </Box>
@@ -165,127 +165,119 @@ const InvoiceDetailView = ({ userContext, environment }: ExtensionContextValue) 
 
   return (
     <ContextView title="Storno.ro - Detalii plata">
-      <Box css={{ padding: 'medium' }}>
-        {/* Payment info */}
-        {payment && (
-          <Box>
-            <Inline css={{ gap: 'medium' }}>
-              <Box>Suma:</Box>
-              <Box css={{ fontWeight: 'bold' }}>
-                {payment.amount} {payment.currency}
-              </Box>
-            </Inline>
-
-            <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-              <Box>Status:</Box>
-              <Badge type={payment.status === 'succeeded' ? 'positive' : 'warning'}>
-                {payment.status}
-              </Badge>
-            </Inline>
-
-            {payment.customerName && (
-              <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-                <Box>Client:</Box>
-                <Box>{payment.customerName}</Box>
-              </Inline>
-            )}
-
-            {payment.customerEmail && (
-              <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-                <Box>Email:</Box>
-                <Box>{payment.customerEmail}</Box>
-              </Inline>
-            )}
-          </Box>
-        )}
-
-        {/* Action messages */}
-        {actionMessage && (
-          <Box css={{ marginTop: 'small' }}>
-            {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-            <Notice type={actionMessage.type} title={actionMessage.type === 'positive' ? 'Succes' : 'Eroare'} description={actionMessage.text} />
-          </Box>
-        )}
-
-        <Divider />
-
-        {/* Matched e-Facturi */}
-        {matchedInvoices.length > 0 ? (
-          <Box>
-            <Box css={{ fontWeight: 'bold', marginBottom: 'small' }}>e-Facturi asociate</Box>
-            {matchedInvoices.map((invoice) => {
-              const statusIdx = getStatusIndex(invoice.status)
-              const isRejected = invoice.status === 'rejected'
-
-              return (
-                <Box key={invoice.id} css={{ marginBottom: 'medium' }}>
-                  <Inline css={{ gap: 'medium' }}>
-                    <Box css={{ fontWeight: 'bold' }}>{invoice.invoiceNumber}</Box>
-                    <Box>{invoice.total} {invoice.currency}</Box>
-                  </Inline>
-
-                  {/* Status pipeline */}
-                  <Inline css={{ gap: 'xsmall', marginTop: 'xsmall' }}>
-                    {STATUS_PIPELINE.map((step, i) => (
-                      <Badge
-                        key={step.key}
-                        type={
-                          isRejected && i === STATUS_PIPELINE.length - 1
-                            ? 'negative'
-                            : i <= statusIdx
-                              ? 'positive'
-                              : 'neutral'
-                        }
-                      >
-                        {isRejected && step.key === 'validated' ? 'Respinsa' : step.label}
-                      </Badge>
-                    ))}
-                  </Inline>
-
-                  {/* ANAF error + retry */}
-                  {isRejected && (
-                    <Box css={{ marginTop: 'small' }}>
-                      {invoice.anafStatus && (
-                        // @ts-expect-error title/description work at runtime but SDK types omit them
-                        <Notice type="negative" title="Eroare ANAF" description={invoice.anafStatus} />
-                      )}
-                      <Box css={{ marginTop: 'xsmall' }}>
-                        <Button
-                          type="primary"
-                          size="small"
-                          onPress={() => handleRetry(invoice.id)}
-                          disabled={actionBusy}
-                        >
-                          {actionBusy ? 'Se retrimite...' : 'Retrimite la ANAF'}
-                        </Button>
-                      </Box>
-                    </Box>
-                  )}
-                </Box>
-              )
-            })}
-          </Box>
-        ) : (
-          <Box>
-            <Badge type="info">
-              Nicio e-Factura gasita pentru aceasta plata
+      {/* Payment summary */}
+      {payment && (
+        <Box css={{ marginBottom: 'small' }}>
+          <Inline css={{ gap: 'small' }}>
+            <Box css={{ fontWeight: 'bold' }}>
+              {payment.amount} {payment.currency}
+            </Box>
+            <Badge type={payment.status === 'succeeded' ? 'positive' : 'warning'}>
+              {payment.status}
             </Badge>
+          </Inline>
 
-            {/* Manual create button */}
-            {payment?.stripeInvoiceId && (
-              <Box css={{ marginTop: 'small' }}>
-                <Button
-                  type="primary"
-                  onPress={handleCreateInvoice}
-                  disabled={actionBusy}
-                >
-                  {actionBusy ? 'Se creeaza...' : 'Creeaza e-Factura'}
-                </Button>
+          {payment.customerName && (
+            <Inline css={{ gap: 'xsmall' }}>
+              <Box css={{ color: 'secondary' }}>Client:</Box>
+              <Box>{payment.customerName}</Box>
+            </Inline>
+          )}
+
+          {payment.customerEmail && (
+            <Inline css={{ gap: 'xsmall' }}>
+              <Box css={{ color: 'secondary' }}>Email:</Box>
+              <Box>{payment.customerEmail}</Box>
+            </Inline>
+          )}
+        </Box>
+      )}
+
+      {/* Action feedback */}
+      {actionMessage && (
+        <Box css={{ marginBottom: 'small' }}>
+          {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
+          <Notice type={actionMessage.type} title={actionMessage.type === 'positive' ? 'Succes' : 'Eroare'} description={actionMessage.text} />
+        </Box>
+      )}
+
+      <Divider />
+
+      {/* Matched e-Facturi */}
+      {matchedInvoices.length > 0 ? (
+        <Box>
+          <Box css={{ fontWeight: 'bold', marginBottom: 'xsmall' }}>e-Facturi asociate</Box>
+          {matchedInvoices.map((invoice) => {
+            const statusIdx = getStatusIndex(invoice.status)
+            const isRejected = invoice.status === 'rejected'
+            const displayTitle = invoice.invoiceNumber || ('Ciorna #' + invoice.id.slice(-6))
+
+            return (
+              <Box key={invoice.id} css={{ marginBottom: 'small' }}>
+                <Inline css={{ gap: 'small' }}>
+                  <Box css={{ fontWeight: 'bold' }}>{displayTitle}</Box>
+                  <Box css={{ color: 'secondary' }}>{invoice.total} {invoice.currency}</Box>
+                </Inline>
+
+                {/* Status pipeline */}
+                <Inline css={{ gap: 'xsmall', marginTop: 'xsmall' }}>
+                  {STATUS_PIPELINE.map((step, i) => (
+                    <Badge
+                      key={step.key}
+                      type={
+                        isRejected && i === STATUS_PIPELINE.length - 1
+                          ? 'negative'
+                          : i <= statusIdx
+                            ? 'positive'
+                            : 'neutral'
+                      }
+                    >
+                      {isRejected && step.key === 'validated' ? 'Respinsa' : step.label}
+                    </Badge>
+                  ))}
+                </Inline>
+
+                {/* ANAF error + retry */}
+                {isRejected && (
+                  <Box css={{ marginTop: 'xsmall' }}>
+                    {invoice.anafStatus && (
+                      // @ts-expect-error title/description work at runtime but SDK types omit them
+                      <Notice type="negative" title="Eroare ANAF" description={invoice.anafStatus} />
+                    )}
+                    <Box css={{ marginTop: 'xsmall' }}>
+                      <Button
+                        type="primary"
+                        size="small"
+                        onPress={() => handleRetry(invoice.id)}
+                        disabled={actionBusy}
+                      >
+                        {actionBusy ? 'Se retrimite...' : 'Retrimite la ANAF'}
+                      </Button>
+                    </Box>
+                  </Box>
+                )}
               </Box>
-            )}
+            )
+          })}
+        </Box>
+      ) : (
+        <Box>
+          <Box css={{ color: 'secondary', marginBottom: 'small' }}>
+            Nicio e-Factura gasita pentru aceasta plata.
           </Box>
-        )}
-      </Box>
+
+          {/* Manual create button */}
+          {payment?.stripeInvoiceId && (
+            <Button
+              type="primary"
+              onPress={handleCreateInvoice}
+              disabled={actionBusy}
+            >
+              {actionBusy ? 'Se creeaza...' : 'Creeaza e-Factura'}
+            </Button>
+          )}
+        </Box>
+      )}
     </ContextView>
   )
 }

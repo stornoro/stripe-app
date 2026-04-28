@@ -5,7 +5,6 @@ import {
   Divider,
   Inline,
   Badge,
-  Select,
   Switch,
   Notice,
   Link,
@@ -21,8 +20,10 @@ import {
 import { saveTokens, deleteTokens } from '../api/secretStore'
 import { useAuth } from '../hooks/useAuth'
 import { useSettings } from '../hooks/useSettings'
+import { useT } from '../i18n'
 
 const SettingsView = ({ userContext }: ExtensionContextValue) => {
+  const t = useT()
   const {
     loading: authLoading,
     authenticated,
@@ -62,8 +63,6 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
   useEffect(() => () => stopPolling(), [stopPolling])
 
   const handleConnect = useCallback(async () => {
-    // Open the popup *synchronously* on the click so browsers don't block it
-    // for missing user gesture; navigate it once we have the verification URL.
     const popup = window.open('', '_blank')
 
     setBusy(true)
@@ -78,7 +77,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
       auth = await startDeviceAuthorization(stripeAccountId)
     } catch (e: any) {
       if (popup) popup.close()
-      setError(e.message || 'Nu s-a putut initia autentificarea.')
+      setError(e.message || t('settings.startFailed'))
       setBusy(false)
       return
     }
@@ -97,7 +96,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
       if (cancelledRef.current) return
 
       if (Date.now() > deadline) {
-        setError('Codul a expirat. Reincearca.')
+        setError(t('settings.codeExpired'))
         setBusy(false)
         setUserCode(null)
         setVerificationUri(null)
@@ -112,19 +111,19 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
           await saveTokens(userId, result.tokens).catch(() => {})
           setJustConnected(true)
           setJustDisconnected(false)
-          setSuccess('Conectat cu succes!')
+          setSuccess(t('settings.connectSuccess'))
           setUserCode(null)
           setVerificationUri(null)
           setBusy(false)
           return
         case 'denied':
-          setError('Autorizarea a fost refuzata.')
+          setError(t('error.access_denied'))
           setBusy(false)
           setUserCode(null)
           setVerificationUri(null)
           return
         case 'expired':
-          setError('Codul a expirat. Reincearca.')
+          setError(t('settings.codeExpired'))
           setBusy(false)
           setUserCode(null)
           setVerificationUri(null)
@@ -147,7 +146,7 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
     }
 
     pollTimerRef.current = setTimeout(tick, interval)
-  }, [stripeAccountId, userId])
+  }, [stripeAccountId, userId, t])
 
   const handleCancelConnect = useCallback(() => {
     stopPolling()
@@ -170,48 +169,35 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
       setJustConnected(false)
       setSuccess(null)
     } catch (e: any) {
-      setError(e.message || 'Deconectarea a esuat.')
+      setError(e.message || t('settings.disconnectFailed'))
     } finally {
       setBusy(false)
     }
-  }, [stripeAccountId, userId])
-
-  const handleCompanyChange = useCallback(
-    async (e: { target: { value: string } }) => {
-      try {
-        await updateSettings({ defaultCompanyId: e.target.value })
-        setStatusMessage('Salvat')
-        setTimeout(() => setStatusMessage(undefined), 2000)
-      } catch {
-        // Error handled in hook
-      }
-    },
-    [updateSettings],
-  )
+  }, [stripeAccountId, userId, t])
 
   const handleAutoModeChange = useCallback(
     async (e: { target: { checked: boolean } }) => {
       try {
         await updateSettings({ autoMode: e.target.checked })
-        setStatusMessage('Salvat')
+        setStatusMessage(t('common.saved'))
         setTimeout(() => setStatusMessage(undefined), 2000)
       } catch {
         // Error handled in hook
       }
     },
-    [updateSettings],
+    [updateSettings, t],
   )
 
   const handleSave = useCallback(() => {
-    setStatusMessage('Salvat')
+    setStatusMessage(t('common.saved'))
     setTimeout(() => setStatusMessage(undefined), 2000)
-  }, [])
+  }, [t])
 
   if (authLoading) {
     return (
       <SettingsViewContainer onSave={handleSave}>
-        <Box css={{ padding: 'large' }}>
-          <Box>Se incarca...</Box>
+        <Box css={{ paddingY: 'medium' }}>
+          <Box css={{ color: 'secondary' }}>{t('common.loading')}</Box>
         </Box>
       </SettingsViewContainer>
     )
@@ -219,11 +205,11 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
 
   return (
     <SettingsViewContainer onSave={handleSave} statusMessage={statusMessage}>
-      <Box css={{ padding: 'medium' }}>
-        <Inline css={{ gap: 'medium' }}>
-          <Box css={{ fontWeight: 'bold' }}>Status conexiune</Box>
+      <Box css={{ paddingY: 'small' }}>
+        <Inline css={{ gap: 'small', marginBottom: 'small' }}>
+          <Box css={{ fontWeight: 'bold' }}>{t('settings.connectionStatus')}</Box>
           <Badge type={isConnected ? 'positive' : 'neutral'}>
-            {isConnected ? 'Conectat' : 'Neconectat'}
+            {isConnected ? t('settings.connected') : t('settings.disconnected')}
           </Badge>
         </Inline>
 
@@ -232,91 +218,80 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
         {(error || authError || settingsError) && (
           <Box css={{ marginBottom: 'small' }}>
             {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-            <Notice type="negative" title="Eroare" description={error || authError || settingsError} />
+            <Notice type="negative" title={t('common.error')} description={error || authError || settingsError} />
           </Box>
         )}
         {success && (
           <Box css={{ marginBottom: 'small' }}>
             {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
-            <Notice type="positive" title="Succes" description={success} />
+            <Notice type="positive" title={t('common.success')} description={success} />
           </Box>
         )}
 
         {!isConnected && !userCode && (
           <Box>
-            <Box css={{ marginBottom: 'medium' }}>
-              Conecteaza contul tau Storno.ro pentru a genera automat
-              e-Facturi din facturile Stripe.
+            <Box css={{ marginBottom: 'small' }}>
+              {t('settings.connectIntro')}
             </Box>
             <Button
               type="primary"
               onPress={handleConnect}
               disabled={busy}
             >
-              {busy ? 'Se initiaza...' : 'Conecteaza Storno.ro'}
+              {busy ? t('settings.starting') : t('settings.connectButton')}
             </Button>
           </Box>
         )}
 
         {!isConnected && userCode && verificationUri && (
           <Box>
-            <Box css={{ marginBottom: 'small' }}>
-              Codul tau de autorizare:
+            <Box css={{ marginBottom: 'xsmall' }}>
+              {t('settings.codeLabel')}
             </Box>
-            <Box css={{
-              fontFamily: 'monospace',
-              fontWeight: 'bold',
-              marginBottom: 'medium',
-            }}>
+            <Box css={{ fontWeight: 'bold', marginBottom: 'small' }}>
               {userCode}
             </Box>
-            <Box css={{ marginBottom: 'small' }}>
-              Daca fereastra Storno.ro nu s-a deschis automat:
+            <Box css={{ marginBottom: 'xsmall' }}>
+              {t('settings.fallbackPrompt')}
             </Box>
-            <Box css={{ marginBottom: 'medium' }}>
+            <Box css={{ marginBottom: 'small' }}>
               <Link href={verificationUri} target="_blank" type="primary">
-                Deschide Storno.ro pentru autorizare
+                {t('settings.openStorno')}
               </Link>
             </Box>
             <Box css={{ marginBottom: 'small' }}>
-              Asteptam confirmarea ta in fereastra Storno.ro...
+              {t('settings.waitingApproval')}
             </Box>
             <Button onPress={handleCancelConnect}>
-              Anuleaza
+              {t('settings.cancel')}
             </Button>
           </Box>
         )}
 
         {isConnected && (
           <Box>
-            {settings && settings.companies.length > 0 && (
-              <Box css={{ marginBottom: 'medium' }}>
-                <Select
-                  label="Companie implicita"
-                  value={settings.defaultCompanyId ?? ''}
-                  onChange={handleCompanyChange}
-                >
-                  <option value="">Selecteaza compania</option>
-                  {settings.companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.cif})
-                    </option>
-                  ))}
-                </Select>
+            {settings && (
+              <Box css={{ marginBottom: 'small' }}>
+                <Inline css={{ gap: 'small' }}>
+                  <Box css={{ color: 'secondary' }}>{t('settings.companyLabel')}:</Box>
+                  <Box css={{ fontWeight: 'bold' }}>
+                    {settings.company.name} ({settings.company.cif})
+                  </Box>
+                </Inline>
               </Box>
             )}
 
             {settingsLoading && (
-              <Box css={{ padding: 'small' }}>Se incarca setarile...</Box>
+              <Box css={{ color: 'secondary', marginBottom: 'small' }}>{t('settings.loadingSettings')}</Box>
             )}
 
             {settings && (
-              <Box css={{ marginBottom: 'medium' }}>
+              <Box css={{ marginBottom: 'small' }}>
                 <Inline css={{ gap: 'medium' }}>
                   <Box>
-                    <Box css={{ fontWeight: 'bold' }}>Mod automat</Box>
+                    <Box css={{ fontWeight: 'bold' }}>{t('settings.autoModeTitle')}</Box>
                     <Box css={{ color: 'secondary' }}>
-                      Creeaza si trimite automat e-Factura la ANAF
+                      {t('settings.autoModeDescription')}
                     </Box>
                   </Box>
                   <Switch
@@ -329,13 +304,13 @@ const SettingsView = ({ userContext }: ExtensionContextValue) => {
 
             <Divider />
 
-            <Box css={{ marginTop: 'medium' }}>
+            <Box css={{ marginTop: 'small' }}>
               <Button
                 type="destructive"
                 onPress={handleDisconnect}
                 disabled={busy}
               >
-                {busy ? 'Se deconecteaza...' : 'Deconecteaza'}
+                {busy ? t('settings.disconnecting') : t('settings.disconnect')}
               </Button>
             </Box>
           </Box>

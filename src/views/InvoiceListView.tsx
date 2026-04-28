@@ -5,6 +5,7 @@ import {
   List,
   ListItem,
   Badge,
+  Divider,
   Notice,
   Tab,
   TabPanel,
@@ -42,12 +43,71 @@ function filterInvoices(invoices: DashboardInvoice[], tab: string): DashboardInv
   return invoices
 }
 
+/** Returns a meaningful display title for an invoice row, falling back gracefully for drafts. */
+function invoiceTitle(invoice: DashboardInvoice): string {
+  if (invoice.invoiceNumber) return invoice.invoiceNumber
+  if (invoice.receiverName) return invoice.receiverName
+  return 'Ciorna #' + invoice.id.slice(-6)
+}
+
+/** Secondary line for an invoice row (date + name when name was used as title). */
+function invoiceSubtitle(invoice: DashboardInvoice): string {
+  const parts: string[] = []
+  if (invoice.issueDate) parts.push(invoice.issueDate)
+  // Show name only when it was NOT already used as the title
+  if (invoice.invoiceNumber && invoice.receiverName) parts.push(invoice.receiverName)
+  return parts.join(' • ')
+}
+
+function InvoiceRow({ invoice }: { invoice: DashboardInvoice }) {
+  const badge = getStatusBadge(invoice.status)
+  const title = invoiceTitle(invoice)
+  const subtitle = invoiceSubtitle(invoice)
+  const amountLabel = `${invoice.total} ${invoice.currency}`
+
+  return (
+    <ListItem
+      key={invoice.id}
+      id={invoice.id}
+      value={
+        <Inline css={{ gap: 'xsmall' }}>
+          <Box>{amountLabel}</Box>
+          <Badge type={badge.type}>{badge.label}</Badge>
+        </Inline>
+      }
+    >
+      <Box>
+        <Box css={{ fontWeight: 'bold' }}>{title}</Box>
+        {subtitle ? (
+          <Box css={{ color: 'secondary' }}>{subtitle}</Box>
+        ) : null}
+      </Box>
+    </ListItem>
+  )
+}
+
+function InvoiceList({ invoices }: { invoices: DashboardInvoice[] }) {
+  if (invoices.length === 0) {
+    return (
+      <Box css={{ paddingY: 'small' }}>
+        <Box css={{ color: 'secondary' }}>Nicio factura gasita.</Box>
+      </Box>
+    )
+  }
+  return (
+    <List>
+      {invoices.map((invoice) => (
+        <InvoiceRow key={invoice.id} invoice={invoice} />
+      ))}
+    </List>
+  )
+}
+
 const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   const { loading: authLoading, authenticated, error: authError } = useAuth({ userContext })
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'errors'>('all')
 
   useEffect(() => {
     if (authLoading) return
@@ -74,8 +134,8 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   if (authLoading || loading) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
-          <Box>Se incarca...</Box>
+        <Box css={{ paddingY: 'medium' }}>
+          <Box css={{ color: 'secondary' }}>Se incarca...</Box>
         </Box>
       </ContextView>
     )
@@ -84,7 +144,7 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   if (error || authError) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
+        <Box css={{ paddingY: 'medium' }}>
           {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
           <Notice type="attention" title="Eroare" description={error || authError} />
         </Box>
@@ -95,7 +155,7 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   if (!stats) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
+        <Box css={{ paddingY: 'medium' }}>
           {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
           <Notice type="attention" title="Eroare" description="Nu s-au putut incarca datele" />
         </Box>
@@ -104,91 +164,60 @@ const InvoiceListView = ({ userContext }: ExtensionContextValue) => {
   }
 
   const { counts } = stats
-  const filteredInvoices = filterInvoices(stats.recentInvoices, activeTab)
-  const pendingCount = filterInvoices(stats.recentInvoices, 'pending').length
-  const errorsCount = filterInvoices(stats.recentInvoices, 'errors').length
+  const allInvoices = stats.recentInvoices
+  const pendingInvoices = filterInvoices(allInvoices, 'pending')
+  const errorInvoices = filterInvoices(allInvoices, 'errors')
+
+  const modeLabel = stats.autoMode ? 'Mod automat' : 'Mod manual'
+  const descriptionText = [stats.companyName, modeLabel].filter(Boolean).join(' — ')
 
   return (
     <ContextView
       title="Storno.ro"
-      description={stats.companyName ?? undefined}
+      description={descriptionText || undefined}
     >
-      <Box css={{ padding: 'small' }}>
-        {/* Status count badges */}
-        <Inline css={{ gap: 'small' }}>
-          <Badge type="positive">Validate: {counts.validated}</Badge>
-          <Badge type="warning">In curs: {counts.sent_to_anaf}</Badge>
-          <Badge type="negative">Respinse: {counts.rejected}</Badge>
-          <Badge type="info">Emise: {counts.issued}</Badge>
-          <Badge type="neutral">Ciorne: {counts.draft}</Badge>
-        </Inline>
-
-        {/* Auto mode indicator */}
-        <Box css={{ marginTop: 'small' }}>
-          <Badge type={stats.autoMode ? 'positive' : 'neutral'}>
-            {stats.autoMode ? 'Mod automat: ON' : 'Mod manual'}
-          </Badge>
+      {/* Status summary row */}
+      <Inline css={{ gap: 'medium', marginBottom: 'small' }}>
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>{counts.validated}</Box>
+          <Box css={{ color: 'secondary' }}>Validate</Box>
         </Box>
-
-        {/* Tab filter buttons */}
-        <Box css={{ marginTop: 'medium' }}>
-          <Inline css={{ gap: 'small' }}>
-            <Badge
-              type={activeTab === 'all' ? 'info' : 'neutral'}
-            >
-              Toate ({stats.recentInvoices.length})
-            </Badge>
-            <Badge
-              type={activeTab === 'pending' ? 'warning' : 'neutral'}
-            >
-              In curs ({pendingCount})
-            </Badge>
-            <Badge
-              type={activeTab === 'errors' ? 'negative' : 'neutral'}
-            >
-              Erori ({errorsCount})
-            </Badge>
-          </Inline>
+        <Divider />
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>{counts.sent_to_anaf}</Box>
+          <Box css={{ color: 'secondary' }}>In curs</Box>
         </Box>
-
-        {/* Invoice list */}
-        <Box css={{ marginTop: 'small' }}>
-          {filteredInvoices.length === 0 ? (
-            <Box css={{ padding: 'medium' }}>
-              <Badge type="info">Nicio factura gasita</Badge>
-            </Box>
-          ) : (
-            <List onAction={(id) => {
-              if (id === 'tab_all') setActiveTab('all')
-              else if (id === 'tab_pending') setActiveTab('pending')
-              else if (id === 'tab_errors') setActiveTab('errors')
-            }}>
-              {filteredInvoices.map((invoice) => {
-                const badge = getStatusBadge(invoice.status)
-                return (
-                  <ListItem
-                    key={invoice.id}
-                    id={invoice.id}
-                    value={
-                      <Inline css={{ gap: 'small' }}>
-                        <Box>{invoice.total} {invoice.currency}</Box>
-                        <Badge type={badge.type}>{badge.label}</Badge>
-                      </Inline>
-                    }
-                  >
-                    <Box>
-                      <Box css={{ fontWeight: 'bold' }}>{invoice.invoiceNumber}</Box>
-                      <Box css={{ color: 'secondary' }}>
-                        {invoice.receiverName ?? ''} {invoice.issueDate ? `• ${invoice.issueDate}` : ''}
-                      </Box>
-                    </Box>
-                  </ListItem>
-                )
-              })}
-            </List>
-          )}
+        <Divider />
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>{counts.rejected}</Box>
+          <Box css={{ color: 'secondary' }}>Respinse</Box>
         </Box>
-      </Box>
+        <Divider />
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>{counts.issued}</Box>
+          <Box css={{ color: 'secondary' }}>Emise</Box>
+        </Box>
+        <Divider />
+        <Box>
+          <Box css={{ fontWeight: 'bold' }}>{counts.draft}</Box>
+          <Box css={{ color: 'secondary' }}>Ciorne</Box>
+        </Box>
+      </Inline>
+
+      {/* Tabs — runtime pairs Tab[key] with TabPanel[key] and handles selection */}
+      <Tab key="all">Toate ({allInvoices.length})</Tab>
+      <Tab key="pending">In curs ({pendingInvoices.length})</Tab>
+      <Tab key="errors">Erori ({errorInvoices.length})</Tab>
+
+      <TabPanel key="all">
+        <InvoiceList invoices={allInvoices} />
+      </TabPanel>
+      <TabPanel key="pending">
+        <InvoiceList invoices={pendingInvoices} />
+      </TabPanel>
+      <TabPanel key="errors">
+        <InvoiceList invoices={errorInvoices} />
+      </TabPanel>
     </ContextView>
   )
 }

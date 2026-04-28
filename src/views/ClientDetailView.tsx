@@ -30,6 +30,21 @@ function getStatusBadge(status: string) {
   return STATUS_BADGE[status] ?? { type: 'neutral' as const, label: status }
 }
 
+/** Returns a meaningful display title for an invoice row, falling back gracefully for drafts. */
+function invoiceTitle(invoice: Invoice): string {
+  if (invoice.invoiceNumber) return invoice.invoiceNumber
+  if (invoice.receiverName) return invoice.receiverName
+  return 'Ciorna #' + invoice.id.slice(-6)
+}
+
+/** Secondary subtitle line for an invoice row. */
+function invoiceSubtitle(invoice: Invoice): string {
+  const parts: string[] = []
+  if (invoice.issueDate) parts.push(invoice.issueDate)
+  if (invoice.invoiceNumber && invoice.receiverName) parts.push(invoice.receiverName)
+  return parts.join(' • ')
+}
+
 const ClientDetailView = ({ userContext, environment }: ExtensionContextValue) => {
   const { loading: authLoading, authenticated, error: authError } = useAuth({ userContext })
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -126,8 +141,8 @@ const ClientDetailView = ({ userContext, environment }: ExtensionContextValue) =
   if (authLoading || loading) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
-          <Box>Se incarca...</Box>
+        <Box css={{ paddingY: 'medium' }}>
+          <Box css={{ color: 'secondary' }}>Se incarca...</Box>
         </Box>
       </ContextView>
     )
@@ -136,7 +151,7 @@ const ClientDetailView = ({ userContext, environment }: ExtensionContextValue) =
   if (error || authError) {
     return (
       <ContextView title="Storno.ro">
-        <Box css={{ padding: 'large' }}>
+        <Box css={{ paddingY: 'medium' }}>
           {/* @ts-expect-error title/description work at runtime but SDK types omit them */}
           <Notice type="attention" title="Eroare" description={error || authError} />
         </Box>
@@ -149,83 +164,87 @@ const ClientDetailView = ({ userContext, environment }: ExtensionContextValue) =
       title="Storno.ro - Client"
       description={customerInfo ? `${customerInfo.name} (${customerInfo.email})` : undefined}
     >
-      <Box css={{ padding: 'medium' }}>
-        {/* Matched Storno.ro client info */}
-        {matchedClient && (
-          <Box>
+      {/* Matched Storno.ro client info */}
+      {matchedClient && (
+        <Box css={{ marginBottom: 'small' }}>
+          <Inline css={{ gap: 'small', marginBottom: 'xsmall' }}>
             <Box css={{ fontWeight: 'bold' }}>Client Storno.ro</Box>
-            <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-              <Box>Nume:</Box>
-              <Box>{matchedClient.name}</Box>
+            <Badge type="positive">Potrivit</Badge>
+          </Inline>
+
+          <Inline css={{ gap: 'small' }}>
+            <Box css={{ color: 'secondary' }}>Nume:</Box>
+            <Box>{matchedClient.name}</Box>
+          </Inline>
+
+          {matchedClient.cif && (
+            <Inline css={{ gap: 'small' }}>
+              <Box css={{ color: 'secondary' }}>CIF:</Box>
+              <Box>{matchedClient.cif}</Box>
             </Inline>
-            {matchedClient.cif && (
-              <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-                <Box>CIF:</Box>
-                <Box>{matchedClient.cif}</Box>
-              </Inline>
-            )}
-            {matchedClient.email && (
-              <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-                <Box>Email:</Box>
-                <Box>{matchedClient.email}</Box>
-              </Inline>
-            )}
-            {matchedClient.address && (
-              <Inline css={{ gap: 'medium', marginTop: 'xsmall' }}>
-                <Box>Adresa:</Box>
-                <Box>{matchedClient.address}</Box>
-              </Inline>
-            )}
-            <Box css={{ marginTop: 'xsmall' }}>
-              <Badge type="positive">Potrivit</Badge>
-            </Box>
-          </Box>
-        )}
-
-        {!matchedClient && customerInfo?.taxId && (
-          // @ts-expect-error title/description work at runtime but SDK types omit them
-          <Notice type="neutral" title="Fara potrivire" description={`Niciun client Storno.ro gasit cu CIF ${customerInfo.taxId}`} />
-        )}
-
-        {!matchedClient && !customerInfo?.taxId && (
-          // @ts-expect-error title/description work at runtime but SDK types omit them
-          <Notice type="neutral" title="CIF lipsa" description="Clientul Stripe nu are un CIF/tax ID. Adauga un tax ID in Stripe pentru potrivire automata." />
-        )}
-
-        <Divider />
-
-        {/* Invoice history */}
-        <Box css={{ fontWeight: 'bold', marginBottom: 'small' }}>
-          Facturi ({invoices.length})
+          )}
+          {matchedClient.email && (
+            <Inline css={{ gap: 'small' }}>
+              <Box css={{ color: 'secondary' }}>Email:</Box>
+              <Box>{matchedClient.email}</Box>
+            </Inline>
+          )}
+          {matchedClient.address && (
+            <Inline css={{ gap: 'small' }}>
+              <Box css={{ color: 'secondary' }}>Adresa:</Box>
+              <Box>{matchedClient.address}</Box>
+            </Inline>
+          )}
         </Box>
+      )}
 
-        {invoices.length === 0 ? (
-          <Badge type="info">Nicio factura gasita pentru acest client</Badge>
-        ) : (
-          <List>
-            {invoices.map((invoice) => {
-              const badge = getStatusBadge(invoice.status)
-              return (
-                <ListItem
-                  key={invoice.id}
-                  id={invoice.id}
-                  value={
-                    <Inline css={{ gap: 'small' }}>
-                      <Box>{invoice.total} {invoice.currency}</Box>
-                      <Badge type={badge.type}>{badge.label}</Badge>
-                    </Inline>
-                  }
-                >
-                  <Box>
-                    <Box css={{ fontWeight: 'bold' }}>{invoice.invoiceNumber}</Box>
-                    <Box css={{ color: 'secondary' }}>{invoice.issueDate}</Box>
-                  </Box>
-                </ListItem>
-              )
-            })}
-          </List>
-        )}
+      {!matchedClient && customerInfo?.taxId && (
+        // @ts-expect-error title/description work at runtime but SDK types omit them
+        <Notice type="neutral" title="Fara potrivire" description={`Niciun client Storno.ro gasit cu CIF ${customerInfo.taxId}`} />
+      )}
+
+      {!matchedClient && !customerInfo?.taxId && (
+        // @ts-expect-error title/description work at runtime but SDK types omit them
+        <Notice type="neutral" title="CIF lipsa" description="Clientul Stripe nu are un CIF/tax ID. Adauga un tax ID in Stripe pentru potrivire automata." />
+      )}
+
+      <Divider />
+
+      {/* Invoice history */}
+      <Box css={{ fontWeight: 'bold', marginBottom: 'xsmall' }}>
+        Facturi ({invoices.length})
       </Box>
+
+      {invoices.length === 0 ? (
+        <Box css={{ color: 'secondary' }}>Nicio factura gasita pentru acest client.</Box>
+      ) : (
+        <List>
+          {invoices.map((invoice) => {
+            const badge = getStatusBadge(invoice.status)
+            const title = invoiceTitle(invoice)
+            const subtitle = invoiceSubtitle(invoice)
+            return (
+              <ListItem
+                key={invoice.id}
+                id={invoice.id}
+                value={
+                  <Inline css={{ gap: 'xsmall' }}>
+                    <Box>{invoice.total} {invoice.currency}</Box>
+                    <Badge type={badge.type}>{badge.label}</Badge>
+                  </Inline>
+                }
+              >
+                <Box>
+                  <Box css={{ fontWeight: 'bold' }}>{title}</Box>
+                  {subtitle ? (
+                    <Box css={{ color: 'secondary' }}>{subtitle}</Box>
+                  ) : null}
+                </Box>
+              </ListItem>
+            )
+          })}
+        </List>
+      )}
     </ContextView>
   )
 }
